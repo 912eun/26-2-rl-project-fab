@@ -20,6 +20,15 @@ import implant_state as S
 
 TUNED_COV = {"Implant_128": (5, 120), "Implant_132": (3, 240), "Implant_91": (7, 240)}  # 재생 환경 튜닝값 (EDA 06)
 N_OBS = len(S.NAMES) + 6
+EVENT_DT_H = 2.0 / 60  # '다음 사건까지' 방식의 평균 결정 간격(cov 기준, 2026-11-13 측정 약 2분)
+
+
+def per_decision_prob(rate_h, wait_min):
+    """시간당 비율(쉬는 장비 1시간당 횟수)을 결정 1번당 확률로 바꾼다.
+    결정 간격 = wait_min분(고정 시간) 또는 EVENT_DT_H(다음 사건까지). p = 1 − exp(−rate × 간격)."""
+    import math
+    dt = wait_min / 60 if wait_min > 0 else EVENT_DT_H
+    return 1 - math.exp(-rate_h * dt)
 
 
 class _LogDeque(deque):
@@ -136,6 +145,7 @@ class ImplantEnv(gym.Env):
         self.t_start = o.get("t_start", E.WARMUP + self.rng.uniform(0, 160 * 86400))
         self.t_end = o.get("t_end", self.t_start + self.window)
         self.sim = make_sim(fam, rec, sim_seed, self._policy)
+        self.sim.hot_breaks_wait = self.wait_s > 0
         self.parent = greenlet.getcurrent()
         self.g = greenlet(self._sim_main)
         self.last_area = 0.0
@@ -175,7 +185,9 @@ def run_policy(fam, rec, sim_seed, act, use_upstream=True, wait_min=0):
             m.forced_until = s.t + wait_min * 60
             return None, m.forced_until
         return (None, None) if a == 0 else (gs[a], None)
-    sim = make_sim(fam, rec, sim_seed, pol).run()
+    sim = make_sim(fam, rec, sim_seed, pol)
+    sim.hot_breaks_wait = wait_min > 0
+    sim.run()
     out = E.summarize(sim)
     out["rl_share"] = cnt[0] / max(1, sum(cnt))  # 결정 중 RL이 고른 비율 (나머지는 hot lot·가스 없음으로 cov가 처리)
     return out

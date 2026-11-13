@@ -45,6 +45,7 @@ __pycache__/
 !/experiments/check_state.py
 !/experiments/evaluate.py
 !/experiments/analyze.py
+!/experiments/val_noise.py
 
 # results: 최종(v4) 모델과 결과 요약만
 /results/*
@@ -56,5 +57,11 @@ __pycache__/
 !/results/rl_dqn/result_*_v4_s*.json
 !/results/rl_ppo/ppo_*_v4_s*.pt
 !/results/rl_ppo/result_*_v4_s*.json
+# 실험 안내서(docs/EXPERIMENT_PLAN.md) 태그 _e<번호>... 의 모델과 결과, 시험 평가 결과
+!/results/rl_dqn/dqn_*_e[0-9]*_s*.pt
+!/results/rl_dqn/result_*_e[0-9]*_s*.json
+!/results/rl_ppo/ppo_*_e[0-9]*_s*.pt
+!/results/rl_ppo/result_*_e[0-9]*_s*.json
+!/results/eval/
 /results/**/*_last.pt
 /src/smt2020.py
