@@ -30,6 +30,7 @@ __pycache__/
 !/docs/simulator_fidelity.md
 !/docs/STATUS.md
 !/docs/EXPERIMENT_PLAN.md
+!/docs/E1_wait_length_design.md
 
 # experiments: implant RL과 공장 실행에 쓰는 것만 (지난 판·EDA 스크립트 제외)
 /experiments/*
