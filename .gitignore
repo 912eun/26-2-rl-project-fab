@@ -47,6 +47,7 @@ __pycache__/
 !/experiments/analyze.py
 !/experiments/val_noise.py
 !/experiments/select_e1.py
+!/experiments/e1_prewait.py
 !/experiments/fab_report.py
 
 # results: 최종(v4) 모델과 결과 요약만
