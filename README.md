@@ -25,9 +25,9 @@ python3 baselines/run_baselines.py
 python3 calibration/check_fidelity.py
 
 # 3) RL 학습 + 검증 + 시험 (한 번에 10~20분)
-python3 experiments/dqn_implant.py --steps 600000 --explore_switch 0.02 --nstep_h 0.5 --no_upstream --seed 0
-python3 experiments/ppo_implant.py --iters 300 --lam 0.95 --lam_time --lr_decay --wait_init 0.99 --ent 0.003 --ent_end 0 --eval_sample --no_upstream --seed 0
-#    기다리기를 고정 시간으로: 위 명령에 --wait_min 10 추가
+#    (실험 규칙·태그·시드 수는 docs/EXPERIMENT_PLAN.md. 아래는 기본 설정, --wait_min 0 = 다음 사건까지)
+python3 experiments/dqn_implant.py --steps 600000 --nstep_h 0.5 --explore_rate_h 0.6 --wait_min 0 --suffix _try --seed 0
+python3 experiments/ppo_implant.py --iters 300 --lam 0.95 --lam_time --lr_decay --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --eval_sample --wait_min 0 --suffix _try --seed 0
 
 # 4) 공장 전체 시뮬레이터가 필요할 때만 (2년 1회에 1.5시간 이상)
 ./setup_simulator.sh
@@ -138,8 +138,9 @@ docs/                   설계 문서. implant_rl_design.html이 전체 정리(�
 
 | 시드 | 용도 |
 |---|---|
-| 기록 1 | cov 튜닝, RL 학습, RL 검증(고정 14일 구간 9개) |
-| 기록 2, 3 | 작은 환경 시험 (아무것도 고르지 않음) |
+| 기록 1 | cov 튜닝, RL 학습 |
+| 기록 7 | RL 검증(겹치지 않는 14일 구간 장비군당 6개). 2026-11-13 전에는 기록 1의 날짜 구간이라 학습과 겹쳤음 |
+| 기록 2, 3 × 고장 1~5 | 작은 환경 시험 (아무것도 고르지 않음) |
 | 공장 4, 5, 6 | 공장 최종 검증 (2년) |
 
 같은 시드로 공장을 돌리면 투입·고장 난수가 같아서, 2년 실행의 앞 240일은 같은 시드의 240일 기록과 같은 흐름이다. 그래서 시드마다 용도를 하나만 준다.

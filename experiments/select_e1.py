@@ -14,7 +14,7 @@ import numpy as np
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
-PAT = {"dqn": ("rl_dqn", r"result_up_e1(\w+?)_s(\d+)\.json"), "ppo": ("rl_ppo", r"result_up_lt_e1(\w+?)_s(\d+)\.json")}
+PAT = {"dqn": ("rl_dqn", r"result_up_e1(ev|w\d+)_s(\d+)\.json"), "ppo": ("rl_ppo", r"result_up_lt_e1(ev|w\d+)_s(\d+)\.json")}  # E1b(_e1bg...) 등은 제외
 
 
 def load():
@@ -31,9 +31,14 @@ def load():
 
 
 def at_days(curve, D):
-    """학습 곡선에서 sim_days가 D 이하인 마지막 검증 점수."""
-    xs = [v for d, v in curve if d is not None and d <= D]
-    return xs[-1] if xs else float("nan")
+    """학습 곡선에서 sim_days가 D에 가장 가까운 검증 점수. 가장 가까운 점이 D에서 30% 넘게 떨어지면 경고."""
+    pts = [(d, v) for d, v in curve if d is not None]
+    if not pts:
+        return float("nan")
+    d, v = min(pts, key=lambda x: abs(x[0] - D))
+    if abs(d - D) > 0.3 * D:
+        print(f"  (주의: 같은 날수 {D:.0f}일에 가장 가까운 검증 지점이 {d:.0f}일)")
+    return v
 
 
 def pooled_sd(groups):
