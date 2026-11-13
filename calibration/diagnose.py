@@ -43,13 +43,15 @@ def weekly(waits):
     return {k: float(np.mean(v)) for k, v in acc.items()}
 
 
-def paired_ci(pairs, B=4000, seed=0):
-    """Kleijnen, Cheng & Bettonvil (2001)식 짝 비교: 같은 입력(같은 주)의 (재생 − 공장) 차이 평균을 공장 평균 대비 %로, 부트스트랩 95% 구간과 함께."""
-    fm = np.mean([f for f, _ in pairs])
-    d = [(r - f) / fm for f, r in pairs]  # 주별 시간 차이 ÷ 공장 전체 평균 (비율의 평균은 대기가 짧은 주에서 부풀어서 쓰지 않는다)
+def paired_ci(series, block=4, B=4000, seed=0):
+    """Kleijnen, Cheng & Bettonvil (2001)식 짝 비교. series = 시드별 [(공장 주 대기, 재생 주 대기), ...] (주 순서).
+    주끼리는 대기열이 이어져 독립이 아니므로 4주 블록으로 다시 뽑는다. 결과는 (재생 − 공장) 평균 차이를 공장 평균 대비 %로."""
+    fm = np.mean([f for xs in series for f, _ in xs])
+    blocks = [[r - f for f, r in xs[i:i + block]] for xs in series for i in range(0, len(xs), block)]
     rng = random.Random(seed)
-    ms = sorted(np.mean([rng.choice(d) for _ in d]) for _ in range(B))
-    return float(np.mean(d)), ms[int(.025 * B)], ms[int(.975 * B)]
+    est = np.mean([x for b in blocks for x in b]) / fm
+    ms = sorted(np.mean([x for _ in blocks for x in rng.choice(blocks)]) / fm for _ in range(B))
+    return float(est), ms[int(.025 * B)], ms[int(.975 * B)]
 
 
 def metrics(waits, starts, n_m, setup_s):
@@ -147,15 +149,17 @@ def main():
         print(f"{f:12s} 공장 " + " ".join(f"{F[k]:8.3f}" for k in keys))
         print(f"{'':12s} 재생 " + " ".join(f"{R[k]:8.3f}" for k in keys))
         print(f"{'':12s} 차이 " + " ".join(f"{100 * (R[k] / F[k] - 1):+7.0f}%" if F[k] else f"{'-':>8s}" for k in keys))
-        pairs = []
+        series = []
         for s in a.seeds:
             fw = wk[("fab", f, s)][0]
-            for k in fw:
+            xs = []
+            for k in sorted(fw):
                 rv = [d[k] for d in wk[("rep", f, s)] if k in d]
                 if rv and fw[k] > 0:
-                    pairs.append((fw[k], float(np.mean(rv))))
-        m, lo, hi = paired_ci(pairs)
-        print(f"{'':12s} 주간 대기 짝 차이 {100 * m:+.1f}% [95% {100 * lo:+.1f}, {100 * hi:+.1f}] (주 {len(pairs)}개)"
+                    xs.append((fw[k], float(np.mean(rv))))
+            series.append(xs)
+        m, lo, hi = paired_ci(series)
+        print(f"{'':12s} 주간 대기 짝 차이 {100 * m:+.1f}% [95% {100 * lo:+.1f}, {100 * hi:+.1f}] (주 {sum(map(len, series))}개, 4주 블록)"
               + ("  0 포함" if lo <= 0 <= hi else ""))
 
 
