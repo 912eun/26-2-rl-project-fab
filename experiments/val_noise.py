@@ -42,7 +42,8 @@ def cov_job(x):
 def job(x):
     (fam, day, ss), off = x
     env = TeacherEnv(seeds=(C.VAL_REC,))
-    env.reset(options=dict(fam=fam, seed=C.VAL_REC, sim_seed=ss + off, t_start=day * 86400, t_end=(day + C.VAL_DAYS) * 86400))
+    env.reset(options=dict(fam=fam, seed=C.VAL_REC, sim_seed=ss + off, t_start=day * 86400, t_end=(day + C.VAL_DAYS) * 86400,
+                           count_from_start=True))
     cost = 0.0
     while True:
         _, r, _, done, _ = env.step(env.teacher)

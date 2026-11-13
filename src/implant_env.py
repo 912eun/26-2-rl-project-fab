@@ -206,7 +206,8 @@ class Sim:
         self.n_switch = 0
         self.rec = []       # (도착 시각, 대기, 셋업, hot)
         self.meas_end = MEAS_END
-        self.hot_breaks_wait = False  # True면 forced_until(고정 시간 기다리기) 중이라도 hot lot이 있으면 다시 결정한다
+        self.hot_breaks_wait = False
+        self.mark_t, self.mark_area = None, None  # mark_t 시각의 누적 비용(area)을 mark_area에 남긴다 (검증 구간 시작부터 비용 세기)  # True면 forced_until(고정 시간 기다리기) 중이라도 hot lot이 있으면 다시 결정한다
         self.qarea_win = 0.0  # 측정 기간 안의 대기 lot 수 × 시간 (재공·리틀 대기용)
         self.n_arr_win = 0    # 측정 기간에 도착한 lot 수 (재방문 포함)
         self.log = True
@@ -358,6 +359,8 @@ class Sim:
         if na is None and (ne is None or self.nq == 0 and all(m.free for m in self.ms)):
             return False
         nt = ne if na is None or (ne is not None and ne <= na) else na
+        if self.mark_t is not None and self.mark_area is None and self.t <= self.mark_t <= nt:
+            self.mark_area = self.area + self.nq * (self.mark_t - self.t)
         self.area += self.nq * (nt - self.t)
         ov = min(nt, self.meas_end) - max(self.t, self.warmup)
         if ov > 0:

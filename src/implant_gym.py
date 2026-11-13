@@ -146,12 +146,15 @@ class ImplantEnv(gym.Env):
         self.t_end = o.get("t_end", self.t_start + self.window)
         self.sim = make_sim(fam, rec, sim_seed, self._policy)
         self.sim.hot_breaks_wait = self.wait_s > 0
+        count_from_start = o.get("count_from_start", False)  # 검증: 비용을 첫 RL 결정이 아니라 구간 시작 시각부터 센다
+        if count_from_start:
+            self.sim.mark_t = self.t_start
         self.parent = greenlet.getcurrent()
         self.g = greenlet(self._sim_main)
         self.last_area = 0.0
         # 시작 전 구간은 cov로 돌고, 첫 RL 결정에서 멈춘다. 시작 전 비용은 보상에 넣지 않는다.
         out = self.g.switch()
-        self.last_area = self.sim.area
+        self.last_area = self.sim.mark_area if (count_from_start and self.sim.mark_area is not None) else self.sim.area
         self.last_t = self.sim.t
         if out is None:
             return np.zeros(N_OBS, np.float32), {}
