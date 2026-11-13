@@ -71,6 +71,8 @@ def main():
     p.add_argument("--policy", help="rl 모드: 정책 파일(.pt)")
     p.add_argument("--kind", choices=["ppo", "dqn"], help="rl 모드: 정책 종류")
     p.add_argument("--no_upstream", action="store_true", help="rl 모드: 앞 공정 lot 수를 0으로 (학습 때와 같게)")
+    p.add_argument("--rl_fams", nargs="+", default=None,
+                   help="rl 모드: RL을 넣을 장비군 (예: Implant_91). 나머지 implant 장비군은 cov(--cov_fb 값). 기본은 세 장비군 모두")
     p.add_argument("--wait_min", type=float, default=0,
                    help="rl 모드: 0보다 크면 '기다리기' = 이 분 동안 다시 묻지 않기(작은 환경과 같게). hot lot이 오면 기다림을 푼다")
     p.add_argument("--sample", action="store_true", help="rl 모드: argmax 대신 확률 정책에서 뽑는다(PPO, 작은 환경 시험과 같게)")
@@ -95,6 +97,8 @@ def main():
         mode_name = "covfb"
     if a.mode == "rl":
         mode_name = f"rl_{Path(a.policy).stem}"
+        if a.rl_fams:
+            mode_name += "_only" + "_".join(f.split("_")[-1] for f in a.rl_fams)
     cov_params = COV_FB if (a.cov_fb or a.mode == "rl") else COV
     out = ROOT / "results" / "implant_setup" / f"{a.dataset}_{a.dispatcher}_{mode_name}_{a.strategy}_{a.days}d_s{a.seed}{a.tag}"
     (out / "greedy").mkdir(parents=True, exist_ok=True)
@@ -354,7 +358,7 @@ def main():
         net.load_state_dict(torch.load(a.policy))
         net.eval()
         act_fn = RC.sampler(net, 1000 + a.seed) if a.sample else RC.greedy(net)
-        info["policy"] = {"path": a.policy, "kind": a.kind, "use_upstream": not a.no_upstream, "sample": a.sample, "wait_min": a.wait_min}
+        info["policy"] = {"path": a.policy, "kind": a.kind, "use_upstream": not a.no_upstream, "sample": a.sample, "wait_min": a.wait_min, "rl_fams": a.rl_fams}
 
     def rl_decide(machine, lots):
         """rl 모드. 재생 환경의 rl_turn과 같은 조건에서만 정책을 부르고, 나머지는 cov가 처리한다."""
@@ -362,6 +366,8 @@ def main():
         cur = machine.current_setup
         if machine.family not in GAS_FAMS or sn == "" or sn == cur:
             return machine, lots
+        if a.rl_fams and machine.family not in a.rl_fams:
+            return cov_decide(machine, lots)  # RL을 안 넣은 장비군은 cov
         hot = any(l.priority >= hot_priority for l in machine.waiting_lots)
         if cur == "" or hot:
             return cov_decide(machine, lots)
