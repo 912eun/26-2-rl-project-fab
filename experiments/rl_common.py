@@ -118,7 +118,8 @@ def _val_job(job):
     net = _load(kind, state)
     act = sampler(net, ss) if stoch else greedy(net)
     env = G.ImplantEnv(seeds=(VAL_REC,), use_upstream=use_up, wait_min=wait_min)
-    o, _ = env.reset(options=dict(fam=fam, seed=VAL_REC, sim_seed=ss, t_start=day * 86400, t_end=(day + VAL_DAYS) * 86400))
+    o, _ = env.reset(options=dict(fam=fam, seed=VAL_REC, sim_seed=ss, t_start=day * 86400, t_end=(day + VAL_DAYS) * 86400,
+                                  count_from_start=True))  # 분모(cov)와 같이 구간 시작부터 센다 (2026-11-13)
     cost = 0.0
     while True:
         o, r, _, done, _ = env.step(act(o, env.action_masks()))
