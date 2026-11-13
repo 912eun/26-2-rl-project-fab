@@ -35,10 +35,14 @@ class _LogDeque(deque):
 _CHAINS = {}
 
 
-def make_sim(fam, seed, sim_seed, policy):
+def make_sim(fam, seed, sim_seed, policy, fab_downs=False):
+    """fab_downs=True면 고장·PM을 sim_seed 난수가 아니라 같은 기록 시드의 공장 기록(downs.csv)으로 재생한다."""
     if (fam, seed) not in _CHAINS:  # 기록 읽기는 프로세스마다 한 번만
         _CHAINS[(fam, seed)] = E.load_chains(fam, seed, 12 * 3600)[0]
-    sim = E.Sim(fam, _CHAINS[(fam, seed)], policy, seed=sim_seed)
+    sched = E.fab_schedule(fam, seed, sim_seed) if fab_downs else None
+    if fab_downs and sched is None:
+        raise FileNotFoundError(f"공장 고장 기록 없음: {E.record_path(seed, 'downs.csv')}")
+    sim = E.Sim(fam, _CHAINS[(fam, seed)], policy, seed=sim_seed, sched=sched)
     arr = [[] for _ in range(sim.n_gas)]
     sim.q = [_LogDeque(arr[g]) for g in range(sim.n_gas)]
     sim.qh = [_LogDeque(arr[g]) for g in range(sim.n_gas)]

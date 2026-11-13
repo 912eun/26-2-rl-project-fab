@@ -20,6 +20,7 @@ max_gap 24h도 비슷(132 +4~+8%, 91 −3~−8%)해서 12h를 유지한다.
 """
 import argparse
 import csv
+import random
 import sys
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -34,10 +35,28 @@ import implant_env as E  # noqa: E402
 T0, T1 = E.WARMUP, 240 * 86400
 
 
+def weekly(waits):
+    """[(도착 시각, 대기 초)] -> {주 번호: 평균 대기 시간(h)}"""
+    acc = defaultdict(list)
+    for ta, w in waits:
+        acc[int((ta - T0) // (7 * 86400))].append(w / 3600)
+    return {k: float(np.mean(v)) for k, v in acc.items()}
+
+
+def paired_ci(pairs, B=4000, seed=0):
+    """Kleijnen, Cheng & Bettonvil (2001)식 짝 비교: 같은 입력(같은 주)의 (재생 − 공장) 차이 평균을 공장 평균 대비 %로, 부트스트랩 95% 구간과 함께."""
+    fm = np.mean([f for f, _ in pairs])
+    d = [(r - f) / fm for f, r in pairs]  # 주별 시간 차이 ÷ 공장 전체 평균 (비율의 평균은 대기가 짧은 주에서 부풀어서 쓰지 않는다)
+    rng = random.Random(seed)
+    ms = sorted(np.mean([rng.choice(d) for _ in d]) for _ in range(B))
+    return float(np.mean(d)), ms[int(.025 * B)], ms[int(.975 * B)]
+
+
 def metrics(waits, starts, n_m, setup_s):
-    """waits: [대기 초] (60일 이후 도착), starts: {장비: [(t, 교체였나, 처리 초)]}"""
+    """waits: [(도착 시각, 대기 초)] (60일 이후 도착), starts: {장비: [(t, 교체였나, 처리 초)]}"""
     span = T1 - T0
-    w = np.array(waits) / 3600
+    wk = weekly(waits)
+    w = np.array([x[1] for x in waits]) / 3600
     sw, runs, busy = 0, [], 0.0
     for m, xs in starts.items():
         xs = sorted(x for x in xs if T0 <= x[0] < T1)
@@ -53,7 +72,7 @@ def metrics(waits, starts, n_m, setup_s):
                 cur += 1
     runs = np.array(runs) if runs else np.array([0])
     return dict(wait_h=w.mean(), p50=np.median(w), p90=np.quantile(w, .9), queue=w.sum() * 3600 / span,
-                sw=sw / n_m / (span / 86400), run=runs.mean(), run7=(runs < 7).mean(), util=busy / (n_m * span))
+                sw=sw / n_m / (span / 86400), run=runs.mean(), run7=(runs < 7).mean(), util=busy / (n_m * span), weekly=wk)
 
 
 def fab(fam, seed):
@@ -67,7 +86,7 @@ def fab(fam, seed):
                 arrive[key] = t
                 continue
             if key in arrive and T0 <= arrive[key] < T1 and t < T1:
-                waits.append(t - arrive[key])
+                waits.append((arrive[key], t - arrive[key]))
             starts[r["machine"]].append((t, r["setup"] != r["machine_setup_before"], float(r["machine_time"])))
     f = E.FAMILIES[fam]
     return metrics(waits, starts, f["n"], f["setup"])
@@ -82,21 +101,21 @@ class LogSim(E.Sim):
             self.wlog = []
         self.dlog[m.idx].append((self.t, st > 0, lot[1]))
         if T0 <= lot[0] < T1:
-            self.wlog.append(self.t - lot[0])
+            self.wlog.append((lot[0], self.t - lot[0]))
         return super()._dispatch(m, g)
 
 
-def replay(fam, seed, ss, gap):
+def replay(fam, seed, ss, gap, fab_downs=False):
     arr = E.load_chains(fam, seed, gap)[0]
-    s = LogSim(fam, arr, E.lssu, seed=ss)
+    s = LogSim(fam, arr, E.lssu, seed=ss, sched=E.fab_schedule(fam, seed, ss) if fab_downs else None)
     s.run(until=T1)
     f = E.FAMILIES[fam]
     return metrics(s.wlog, s.dlog, f["n"], f["setup"])
 
 
 def job(x):
-    kind, fam, seed, ss, gap = x
-    return x, (fab(fam, seed) if kind == "fab" else replay(fam, seed, ss, gap))
+    kind, fam, seed, ss, gap, fd = x
+    return x, (fab(fam, seed) if kind == "fab" else replay(fam, seed, ss, gap, fd))
 
 
 def main():
@@ -107,16 +126,20 @@ def main():
     p.add_argument("--max_gap_h", type=float, default=12)
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--fams", nargs="+", default=list(E.FAMILIES))
+    p.add_argument("--fab_downs", action="store_true", help="고장·PM을 공장 기록(downs.csv)으로 재생 (그러면 고장 시드는 1개면 됨)")
     a = p.parse_args()
     gap = a.max_gap_h * 3600
-    jobs = [("fab", f, s, 0, gap) for f in a.fams for s in a.seeds]
-    jobs += [("rep", f, s, ss, gap) for f in a.fams for s in a.seeds for ss in a.sims]
+    sims = a.sims[:1] if a.fab_downs else a.sims
+    jobs = [("fab", f, s, 0, gap, False) for f in a.fams for s in a.seeds]
+    jobs += [("rep", f, s, ss, gap, a.fab_downs) for f in a.fams for s in a.seeds for ss in sims]
     res = defaultdict(list)
+    wk = defaultdict(list)  # (kind, f, s) -> [주별 dict]
     with ProcessPoolExecutor(a.workers) as ex:
-        for (kind, f, s, ss, _), m in ex.map(job, jobs):
+        for (kind, f, s, ss, _, _), m in ex.map(job, jobs):
             res[(kind, f)].append(m)
+            wk[(kind, f, s)].append(m["weekly"])
     keys = ["wait_h", "p50", "p90", "queue", "sw", "run", "run7", "util"]
-    print(f"lssu, 기록 시드 {a.seeds}, 60~240일. 재생은 고장 시드 {a.sims} 평균. 차이 = 재생/공장 − 1")
+    print(f"lssu, 기록 시드 {a.seeds}, 60~240일. 재생 고장: {'공장 기록 그대로' if a.fab_downs else f'난수 시드 {sims} 평균'}. 차이 = 재생/공장 − 1")
     print(f"{'':12s} {'':4s} " + " ".join(f"{k:>8s}" for k in keys))
     for f in a.fams:
         F = {k: np.mean([m[k] for m in res[("fab", f)]]) for k in keys}
@@ -124,6 +147,16 @@ def main():
         print(f"{f:12s} 공장 " + " ".join(f"{F[k]:8.3f}" for k in keys))
         print(f"{'':12s} 재생 " + " ".join(f"{R[k]:8.3f}" for k in keys))
         print(f"{'':12s} 차이 " + " ".join(f"{100 * (R[k] / F[k] - 1):+7.0f}%" if F[k] else f"{'-':>8s}" for k in keys))
+        pairs = []
+        for s in a.seeds:
+            fw = wk[("fab", f, s)][0]
+            for k in fw:
+                rv = [d[k] for d in wk[("rep", f, s)] if k in d]
+                if rv and fw[k] > 0:
+                    pairs.append((fw[k], float(np.mean(rv))))
+        m, lo, hi = paired_ci(pairs)
+        print(f"{'':12s} 주간 대기 짝 차이 {100 * m:+.1f}% [95% {100 * lo:+.1f}, {100 * hi:+.1f}] (주 {len(pairs)}개)"
+              + ("  0 포함" if lo <= 0 <= hi else ""))
 
 
 if __name__ == "__main__":

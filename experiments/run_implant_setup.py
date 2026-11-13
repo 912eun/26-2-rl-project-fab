@@ -79,6 +79,9 @@ def main():
     p.add_argument("--days", type=int, default=730)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--log_events", action="store_true", help="implant 가스 장비군의 도착/투입 기록을 events.csv로 저장")
+    p.add_argument("--log_downs", action="store_true",
+                   help="implant 장비의 고장·PM(시간 기반, 처리 매수 기반) 시각과 길이를 downs.csv로 저장 (재생 환경의 고장 재생용)")
+    p.add_argument("--tag", default="", help="출력 폴더 이름 뒤에 붙일 표시 (기존 결과를 덮어쓰지 않으려고)")
     p.add_argument("--log_prev", action="store_true",
                    help="implant 도착마다 route상 바로 앞 1, 2번째 공정에 들어온 시각을 prev_times.csv로 저장 (재생 환경의 앞 공정 lot 수용)")
     p.add_argument("--log_state", action="store_true",
@@ -91,7 +94,7 @@ def main():
     if a.mode == "rl":
         mode_name = f"rl_{Path(a.policy).stem}"
     cov_params = COV_FB if (a.cov_fb or a.mode == "rl") else COV
-    out = ROOT / "results" / "implant_setup" / f"{a.dataset}_{a.dispatcher}_{mode_name}_{a.strategy}_{a.days}d_s{a.seed}"
+    out = ROOT / "results" / "implant_setup" / f"{a.dataset}_{a.dispatcher}_{mode_name}_{a.strategy}_{a.days}d_s{a.seed}{a.tag}"
     (out / "greedy").mkdir(parents=True, exist_ok=True)
 
     sys.path.insert(0, str(SIM / "simulation"))
@@ -402,6 +405,51 @@ def main():
             inner_free_p(self, lot)
         DM.free_up_lots = staticmethod(prev_free)
 
+    downs = []  # (t, family, machine, kind, length 초). kind: br 고장, tpm 시간 기반 PM(사건), tpm_merged(투입에 합쳐짐), ppm i(처리 매수 기반)
+    if a.log_downs:
+        from events import BreakdownEvent
+        cur = {"kind": None}
+        inner_handle = BreakdownEvent.handle
+
+        def logged_handle(self, inst):
+            cur["kind"] = "br" if self.is_breakdown else "tpm"
+            try:
+                inner_handle(self, inst)
+            finally:
+                cur["kind"] = None
+        BreakdownEvent.handle = logged_handle
+        inner_hb = instance.handle_breakdown
+
+        def logged_hb(machine, delay):
+            if machine.family in GAS_FAMS:
+                downs.append((instance.current_time, machine.family, machine.idx, cur["kind"] or "?", delay))
+            return inner_hb(machine, delay)
+        instance.handle_breakdown = logged_hb
+        inner_tpm = BreakdownEvent.handle_timebased_pm
+
+        def logged_tpm(self, inst):
+            t = inner_tpm(self, inst)
+            if self.machine.family in GAS_FAMS:
+                downs.append((inst.current_time, self.machine.family, self.machine.idx, "tpm_merged", t))
+            return t
+        BreakdownEvent.handle_timebased_pm = logged_tpm
+
+        class _PMProxy:
+            """처리 매수 기반 PM 길이를 뽑을 때 기록한다. 원래 분포 객체의 sample()을 그대로 부른다(난수 순서 동일)."""
+            def __init__(self, d, m, i):
+                self.d, self.m, self.i = d, m, i
+
+            def sample(self):
+                x = self.d.sample()
+                downs.append((instance.current_time, self.m.family, self.m.idx, f"ppm{self.i}", x))
+                return x
+
+            def __getattr__(self, k):
+                return getattr(self.d, k)
+        for f in GAS_FAMS:
+            for m in instance.family_machines[f]:
+                m.maintenance_time = [_PMProxy(d, m, i) for i, d in enumerate(m.maintenance_time)]
+
     if a.log_events:
         inner_free = DM.free_up_lots
 
@@ -473,6 +521,11 @@ def main():
             w.writerow(["t", "kind", "family", "lot", "setup", "part", "priority", "machine", "machine_setup_before", "n",
                         "step", "machine_time"])
             w.writerows(events)
+    if a.log_downs:
+        with open(out / "downs.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["t", "family", "machine", "kind", "length"])
+            w.writerows(downs)
     if a.log_state:
         with open(out / "state_log.csv", "w", newline="") as fh:
             w = csv.writer(fh)

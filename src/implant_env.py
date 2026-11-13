@@ -72,6 +72,37 @@ def make_schedule(n, seed, horizon=400 * 86400):
     return sched
 
 
+def fab_schedule(family, rec_seed, fallback_seed=0):
+    """공장 기록(downs.csv)의 고장·PM을 그대로 쓰는 일정. 형식은 make_schedule과 같다.
+
+    - 고장: 공장 장비 번호를 정렬해 0..n-1로 맞추고, 그 장비의 (시각, 길이)를 그대로 쓴다.
+    - 처리 매수 기반 PM: 공장 그 장비에서 뽑힌 길이를 순서대로 쓴다. 재생에서 PM이 더 많이 오면 fallback 난수로 채운다.
+      (PM이 오는 시각은 재생에서 그 장비가 처리한 매수로 정해지므로 공장과 다를 수 있다.)
+    공장 기록이 없으면 None.
+    """
+    path = record_path(rec_seed, "downs.csv")
+    if not path.exists():
+        return None
+    rows = {}
+    with open_record(path) as fh:
+        for r in csv.DictReader(fh):
+            if r["family"] == family:
+                rows.setdefault(r["machine"], []).append((float(r["t"]), r["kind"], float(r["length"])))
+    n = FAMILIES[family]["n"]
+    ids = sorted(rows, key=int)
+    base = make_schedule(n, fallback_seed)
+    out = []
+    for i in range(n):
+        xs = sorted(rows.get(ids[i], [])) if i < len(ids) else []
+        br = [(t, ln) for t, k, ln in xs if k == "br"]
+        pm = []
+        for j in range(3):
+            got = [ln for t, k, ln in xs if k == f"ppm{j}"]
+            pm.append(got + base[i][1][j][len(got):])
+        out.append((br, pm))
+    return out
+
+
 def load_chains(family, seed, max_gap=float("inf")):
     """되먹임 판. 같은 장비군 재방문을 연결한다.
 
@@ -157,7 +188,8 @@ class M:
 
 
 class Sim:
-    def __init__(self, family, arrivals, policy, seed=0, use_pm=True, use_br=True, warmup=WARMUP, n_gas=3):
+    def __init__(self, family, arrivals, policy, seed=0, use_pm=True, use_br=True, warmup=WARMUP, n_gas=3, sched=None):
+        """sched: None이면 seed로 고장·PM을 뽑는다(make_schedule). fab_schedule(...)을 주면 공장 기록의 고장을 재생한다."""
         p = FAMILIES[family]
         self.setup, self.every, self.arr, self.policy = p["setup"], p["every"], arrivals, policy
         self.use_pm, self.warmup, self.n_gas = use_pm, warmup, n_gas
@@ -165,7 +197,7 @@ class Sim:
         self.q = [deque() for _ in range(n_gas)]   # 보통 lot: (도착 시각, machine_time)
         self.qh = [deque() for _ in range(n_gas)]  # hot lot
         self.ev, self.seq, self.i, self.t = [], 0, 0, 0.0
-        self.sched = make_schedule(p["n"], seed)
+        self.sched = sched if sched is not None else make_schedule(p["n"], seed)
         self.busy_id = [0] * p["n"]
         self.nq = 0
         self.area = 0.0     # 누적 대기 면적 + 교체 지연 (rollout의 비용)
@@ -180,7 +212,8 @@ class Sim:
         self.up_cnt = [[0] * n_gas, [0] * n_gas]
         if use_br:
             for m in self.ms:
-                self._push(self.sched[m.idx][0][0][0], BREAK, m.idx)
+                if self.sched[m.idx][0]:
+                    self._push(self.sched[m.idx][0][0][0], BREAK, m.idx)
 
     def clone(self, log=False):
         c = copy.copy(self)
