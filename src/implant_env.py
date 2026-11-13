@@ -27,6 +27,7 @@ MIN_RUN = 7
 MTTF, MTTR = 10080 * 60, 604.8 * 60
 DONE, WAKE, BREAK, ARRIVE = 0, 1, 2, 3
 WARMUP = 60 * 86400
+MEAS_END = 220 * 86400  # 지표는 60~220일에 도착한 lot으로 잰다. 시뮬레이션은 기록 끝(약 240일)까지 돌려 측정 대상이 끝나게 한다
 
 
 def record_path(seed, name):
@@ -204,6 +205,9 @@ class Sim:
         self.setup_s = self.after_setup_s = 0.0
         self.n_switch = 0
         self.rec = []       # (도착 시각, 대기, 셋업, hot)
+        self.meas_end = MEAS_END
+        self.qarea_win = 0.0  # 측정 기간 안의 대기 lot 수 × 시간 (재공·리틀 대기용)
+        self.n_arr_win = 0    # 측정 기간에 도착한 lot 수 (재방문 포함)
         self.log = True
         self.no_chain = False  # 상상 중에는 재방문을 평평한 과거 도착으로 대신한다
         # 앞 공정 lot 수 (RL 상태용). up_heap: (진입 시각, k, 가스), up_cnt[k][g]: 진입했고 아직 도착 안 한 lot 수
@@ -354,11 +358,16 @@ class Sim:
             return False
         nt = ne if na is None or (ne is not None and ne <= na) else na
         self.area += self.nq * (nt - self.t)
+        ov = min(nt, self.meas_end) - max(self.t, self.warmup)
+        if ov > 0:
+            self.qarea_win += self.nq * ov
         self.t = nt
         while self.i < len(self.arr) and self.arr[self.i][0] <= self.t:
             a = self.arr[self.i]
             self._up_arrive(a)
             (self.qh if a[2] else self.q)[a[1]].append((a[0], a[3], a[2], a[4] if len(a) > 4 else None))
+            if self.warmup <= a[0] < self.meas_end:
+                self.n_arr_win += 1
             self.nq += 1
             self.i += 1
         while self.ev and self.ev[0][0] <= self.t:
@@ -367,6 +376,8 @@ class Sim:
                 a = extra
                 self._up_arrive(a)
                 (self.qh if a[2] else self.q)[a[1]].append((self.t, a[3], a[2], a[4]))
+                if self.warmup <= self.t < self.meas_end:
+                    self.n_arr_win += 1
                 self.nq += 1
                 continue
             m = self.ms[mi]
@@ -497,8 +508,16 @@ def past_future(arrivals, sched_pool, H=8 * 3600, seed=0, L=0):
 
 
 def summarize(sim, days=240):
-    """지표 묶음. 대기는 시뮬레이터식, 지연은 대기 + 그 lot이 일으킨 셋업."""
-    rec = sim.rec
+    """지표 묶음 (2026-11-13 평가 수정, docs/EXPERIMENT_PLAN.md).
+
+    측정 대상 = 60~220일(sim.warmup ~ sim.meas_end)에 도착한 lot. 시뮬레이션은 그 뒤로도 돌아서 대상 lot이 거의 다 끝난다.
+    - delay_h  : 주 지표 D. lot당 (대기 + 그 lot이 일으킨 교체 시간), 처리를 시작한 측정 대상 lot 평균
+    - unstarted: 측정 대상인데 끝까지 처리를 시작 못 한 lot 수 (0이어야 D에 빠진 lot이 없음)
+    - wip      : 측정 기간 시간 평균 대기 lot 수 (재공)
+    - little_wait_h: 리틀 법칙 대기 = wip ÷ 도착률. wait_h와 거의 같아야 굶기기가 없다는 뜻
+    - weekly   : 도착 주별 평균 지연(초), 짝 비교·블록 부트스트랩용
+    """
+    rec = [r for r in sim.rec if r[0] < sim.meas_end]
     n = len(rec)
     if n == 0:
         return {}
@@ -507,10 +526,22 @@ def summarize(sim, days=240):
     d = sorted(r[1] + r[2] for r in rec)
     hot = [r[1] + r[2] for r in rec if r[3]]
     span = max(sim.t - sim.warmup, 1)
+    win = max(min(sim.t, sim.meas_end) - sim.warmup, 1)
+    lam = sim.n_arr_win / win
+    wip = sim.qarea_win / win
+    wk = {}
+    for r in rec:
+        k = int((r[0] - sim.warmup) // (7 * 86400))
+        a = wk.setdefault(k, [0.0, 0])
+        a[0] += r[1] + r[2]
+        a[1] += 1
     return dict(n=n, wait_h=wait, delay_h=delay, p95_h=d[int(.95 * n)] / 3600,
                 hot_delay_h=(sum(hot) / len(hot) / 3600 if hot else float("nan")),
                 setup_ratio=sim.after_setup_s / (len(sim.ms) * span),
-                switch_per_day=sum(1 for r in rec if r[2] > 0) / (span / 86400))
+                switch_per_day=sum(1 for r in sim.rec if r[2] > 0) / (span / 86400),
+                unstarted=sim.n_arr_win - n, wip=wip, little_wait_h=(wip / lam / 3600 if lam > 0 else float("nan")),
+                throughput_per_day=n / (win / 86400),
+                weekly={k: v[0] / v[1] for k, v in sorted(wk.items())})
 
 
 def weekly(sim):

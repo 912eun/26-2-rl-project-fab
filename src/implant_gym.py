@@ -161,9 +161,13 @@ def run_policy(fam, rec, sim_seed, act, use_upstream=True, wait_min=0):
     q, tmax = TUNED_COV[fam]
     base = E.thr(q, tmax * 60, cov=True)
 
+    cnt = [0, 0]  # [RL이 고른 결정, cov가 대신 처리한 결정] (교체가 필요한 결정만)
+
     def pol(s, m):
         if not rl_turn(s, m):
+            cnt[1] += 1
             return base(s, m)
+        cnt[0] += 1
         obs, gs = observe(s, m, use_upstream)
         mask = np.array([True, s.waiting(gs[1]) > 0, s.waiting(gs[2]) > 0])
         a = act(obs, mask)
@@ -172,4 +176,6 @@ def run_policy(fam, rec, sim_seed, act, use_upstream=True, wait_min=0):
             return None, m.forced_until
         return (None, None) if a == 0 else (gs[a], None)
     sim = make_sim(fam, rec, sim_seed, pol).run()
-    return E.summarize(sim)
+    out = E.summarize(sim)
+    out["rl_share"] = cnt[0] / max(1, sum(cnt))  # 결정 중 RL이 고른 비율 (나머지는 hot lot·가스 없음으로 cov가 처리)
+    return out
