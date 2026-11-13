@@ -1,7 +1,7 @@
 """검증 점수의 잡음 크기를 잰다: 같은 정책(cov를 RL 자리에 넣은 것)을 검증 구간에 넣고, 고장 시드 묶음만 바꿔 점수가 얼마나 흔들리나.
 
-검증 점수 = 구간별 (정책 비용 ÷ cov 비용)의 평균. cov 비용은 rl_common.VAL의 고장 시드로 고정이고,
-여기서는 '정책 쪽' 고장 시드를 K묶음으로 바꿔 본다. 두 설정을 비교할 때 이 표준편차보다 작은 차이는 잡음으로 본다.
+검증 점수 = 구간별 (정책 비용 ÷ 같은 고장 시드의 cov 비용)의 평균(짝 비교). 여기서는 검증 구간의 고장 시드 묶음을
+K개로 바꿔 가며(정책과 cov를 같이 바꿈) 같은 정책의 점수가 얼마나 흔들리나 본다.
 또 cov를 RL 자리에 넣은 점수(기본 고장 시드) 자체가 이 검증의 기준점이다(옛 검증에서는 0.952).
 
 실행: python3 experiments/val_noise.py [--K 8]
@@ -34,6 +34,11 @@ class TeacherEnv(G.ImplantEnv):
         return (None, None) if a == 0 else (gs[a], None)
 
 
+def cov_job(x):
+    (fam, day, ss), off = x
+    return C._window_cost_cov((fam, day, ss + off))
+
+
 def job(x):
     (fam, day, ss), off = x
     env = TeacherEnv(seeds=(C.VAL_REC,))
@@ -52,9 +57,9 @@ def main():
     p.add_argument("--workers", type=int, default=8)
     a = p.parse_args()
     with ProcessPoolExecutor(a.workers) as ex:
-        base = C.cov_val_costs(ex)
         scores = []
         for k in range(a.K):
+            base = list(ex.map(cov_job, [(w, 100 * k) for w in C.VAL]))
             costs = list(ex.map(job, [(w, 100 * k) for w in C.VAL]))
             scores.append(float(np.mean([c / b for c, b in zip(costs, base)])))
             print(f"고장 시드 묶음 {k}: 검증 점수 {scores[-1]:.3f}", flush=True)

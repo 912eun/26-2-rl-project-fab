@@ -36,6 +36,7 @@ def main():
     p.add_argument("--stoch", action="store_true", help="확률 정책 그대로 (PPO)")
     p.add_argument("--wait_min", type=float, default=0)
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--tag", default="", help="같은 모델을 다른 방식으로 평가할 때 결과 이름에 붙일 표시 (예: PPO argmax 평가 _argmax). 시드 번호 앞에 붙는다")
     a = p.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     paths = sorted(x for x in glob.glob(str(ROOT / a.models)) + glob.glob(a.models) if not x.endswith("_last.pt"))
@@ -51,7 +52,12 @@ def main():
             use_up = "noup" not in Path(path).name
             jobs = [(a.kind, path, use_up, f, r, ss, a.stoch, a.wait_min) for f, r, ss in C.TEST]
             res = {f"{x[3]}|{x[4]}|{x[5]}": m for x, m in ex.map(pol_job, jobs)}
-            out = OUT / f"{a.kind}_{Path(path).stem}.json"
+            stem = Path(path).stem
+            if a.tag:
+                import re
+                m = re.match(r"(.*)(_s\d+)$", stem)
+                stem = f"{m.group(1)}{a.tag}{m.group(2)}" if m else stem + a.tag
+            out = OUT / f"{a.kind}_{stem}.json"
             out.write_text(json.dumps(dict(kind=a.kind, model=str(Path(path).relative_to(ROOT)) if str(path).startswith(str(ROOT)) else path,
                                            use_upstream=use_up, stoch=a.stoch, wait_min=a.wait_min, scenarios=res)))
             print("저장", out.name, flush=True)

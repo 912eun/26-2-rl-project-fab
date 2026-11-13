@@ -77,6 +77,26 @@ def per_seed(run, rules, fam=None):
                 rl_share=np.mean([r[6] for r in rows]))
 
 
+AUX = [("p95_h", "지연95%"), ("hot_delay_h", "hot"), ("setup_ratio", "교체비율"), ("switch_per_day", "교체/일"), ("throughput_per_day", "처리량/일")]
+
+
+def aux_txt(stems, runs, rules, fam):
+    """보조 지표: 정책 평균 / cov 평균 (같은 시나리오). fam=None이면 생략."""
+    if fam is None:
+        return ""
+    out = []
+    for k, name in AUX:
+        P, Cv = [], []
+        for s_ in stems:
+            for key, m in runs[s_]["scenarios"].items():
+                f, r, ss = key.split("|")
+                if f == fam:
+                    P.append(m[k]); Cv.append(rules[f"{f}|{r}|{ss}|cov"][k])
+        fmt = (lambda x: f"{100 * x:.1f}%") if k == "setup_ratio" else (lambda x: f"{x:.2f}")
+        out.append(f"{name} {fmt(np.mean(P))}/{fmt(np.mean(Cv))}")
+    return "      보조(정책/cov): " + ", ".join(out)
+
+
 def rl_txt(vs):
     x = [v["rl_share"] for v in vs if not np.isnan(v["rl_share"])]
     return f" | RL 결정 {100 * np.mean(x):.0f}%" if x else ""
@@ -133,6 +153,8 @@ def main():
                   f" | lssu 대비 {100 * ml:+5.1f}% | P(RL<cov) {pe:.2f} [{plo:.2f}, {phi:.2f}]"
                   f" | 미처리 {max(v['unst'] for v in vs)} 리틀차 {100 * max(v['little'] for v in vs):.1f}%"
                   + rl_txt(vs))
+            if fam is not None:
+                print(aux_txt(stems, runs, rules, fam))
     if a.compare:
         A, Bg = a.compare
         print(f"\n조건 비교 {A} − {Bg} (Welch t, cov 대비 %p)")
