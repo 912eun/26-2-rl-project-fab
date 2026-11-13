@@ -1,0 +1,57 @@
+# 화이트리스트 방식: 아래에 적은 것만 올린다.
+/*
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/setup_simulator.sh
+!/src/
+!/baselines/
+!/calibration/
+!/experiments/
+!/data/
+!/docs/
+!/results/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# data: 공장 도착 기록(압축)과 공장 기준값만. 원본 SMT2020은 setup_simulator.sh로 받는다
+/data/*
+!/data/records/
+!/data/fab_reference/
+
+# docs: 설계 문서만 (논문 PDF 등 제외)
+/docs/*
+!/docs/implant_rl_design.html
+!/docs/diffusion_rl_design.html
+!/docs/implant_sar_mapping.md
+!/docs/eda06_preregistration.md
+!/docs/simulator_fidelity.md
+!/docs/STATUS.md
+
+# experiments: implant RL과 공장 실행에 쓰는 것만 (지난 판·EDA 스크립트 제외)
+/experiments/*
+!/experiments/rl_common.py
+!/experiments/ppo_implant.py
+!/experiments/dqn_implant.py
+!/experiments/run_rl_v4.sh
+!/experiments/pick_policy.py
+!/experiments/run_implant_setup.py
+!/experiments/run_implant_logs.sh
+!/experiments/run_fab_final.sh
+!/experiments/run_implant_replay.py
+!/experiments/check_state.py
+
+# results: 최종(v4) 모델과 결과 요약만
+/results/*
+!/results/rl_dqn/
+!/results/rl_ppo/
+/results/rl_dqn/*
+/results/rl_ppo/*
+!/results/rl_dqn/dqn_*_v4_s*.pt
+!/results/rl_dqn/result_*_v4_s*.json
+!/results/rl_ppo/ppo_*_v4_s*.pt
+!/results/rl_ppo/result_*_v4_s*.json
+/results/**/*_last.pt
+/src/smt2020.py
