@@ -129,9 +129,15 @@ def main():
                    help="검증·시험에서 argmax 대신 확률 정책에서 뽑는다. 결정이 촘촘해 '결정마다 작은 확률로 교체'가 학습되므로 argmax는 그 규칙을 지운다")
     p.add_argument("--wait_init", type=float, default=0.0,
                    help="0보다 크면 처음 정책의 기다리기 확률을 이 값으로 맞춘다(출력 층 편향). 결정이 촘촘해서 고르게 뽑으면 교체를 남발한다")
+    p.add_argument("--wait_init_rate_h", type=float, default=None,
+                   help="처음 정책의 교체 빈도를 시간 기준으로: 쉬는 장비 1시간당 교체 횟수. wait_init을 덮어쓴다 "
+                        "(0.3 = '다음 사건까지'에서 wait_init 0.99와 같음)")
     p.add_argument("--ent_end", type=float, default=None, help="엔트로피 계수를 ent에서 이 값까지 선형으로 줄인다")
     p.add_argument("--no_upstream", action="store_true")
     a = p.parse_args()
+    if a.wait_init_rate_h is not None:
+        a.wait_init = 1 - G.per_decision_prob(a.wait_init_rate_h, a.wait_min)
+        print(f"wait_init_rate_h {a.wait_init_rate_h}/h, wait_min {a.wait_min} → 처음 기다리기 확률 {a.wait_init:.4f}", flush=True)
     use_up = not a.no_upstream
     tag = f"{'up' if use_up else 'noup'}{'_lt' if a.lam_time else ''}{a.suffix}_s{a.seed}"
     OUT.mkdir(parents=True, exist_ok=True)
@@ -155,18 +161,20 @@ def main():
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     ex = ProcessPoolExecutor(8)
     log, t0 = [], time.time()
+    sim_h = 0.0  # 모든 환경이 경험한 시뮬레이션 시간 합
     best, best_it, path = float("inf"), -1, OUT / f"ppo_{tag}.pt"
     for it in range(a.iters):
         if a.lr_decay:
             for pg in opt.param_groups:
                 pg["lr"] = a.lr * (1 - it / a.iters)
         trajs = collect(envs, state, net, a.T)
+        sim_h += sum(sum(tr["g"]) for tr, _ in trajs)
         batch = gae(trajs, a.gamma_h, a.lam, a.lam_time)
         ent = a.ent if a.ent_end is None else a.ent + (a.ent_end - a.ent) * it / max(a.iters - 1, 1)
         update(net, opt, batch, a.K, a.mb, a.clip, 0.5, ent)
         mean_r = float(np.mean([np.mean(tr["r"]) for tr, _ in trajs])) / R_SCALE
         wait_share = float((batch[2] == 0).float().mean())
-        row = dict(it=it, mean_r=mean_r, wait_share=wait_share, sec=time.time() - t0)
+        row = dict(it=it, sim_days=sim_h / 24, mean_r=mean_r, wait_share=wait_share, sec=time.time() - t0)
         if (it + 1) % a.val_every == 0 or it == a.iters - 1:
             v, vf = C.validate(ex, "ppo", net, use_up, a.eval_sample, a.wait_min)
             row.update(val=v, val_fam=vf)

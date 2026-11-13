@@ -206,6 +206,7 @@ class Sim:
         self.n_switch = 0
         self.rec = []       # (도착 시각, 대기, 셋업, hot)
         self.meas_end = MEAS_END
+        self.hot_breaks_wait = False  # True면 forced_until(고정 시간 기다리기) 중이라도 hot lot이 있으면 다시 결정한다
         self.qarea_win = 0.0  # 측정 기간 안의 대기 lot 수 × 시간 (재공·리틀 대기용)
         self.n_arr_win = 0    # 측정 기간에 도착한 lot 수 (재방문 포함)
         self.log = True
@@ -339,7 +340,7 @@ class Sim:
                 if self.waiting(m.lock):
                     self._dispatch(m, m.lock)
                 continue
-            if m.forced_until is not None and self.t < m.forced_until:
+            if m.forced_until is not None and self.t < m.forced_until and not (self.hot_breaks_wait and any(self.qh)):
                 continue
             if m.hold_since is None:
                 m.hold_since = self.t

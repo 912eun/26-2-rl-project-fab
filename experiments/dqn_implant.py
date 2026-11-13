@@ -84,9 +84,15 @@ def main():
     p.add_argument("--nstep_h", type=float, default=0.0,
                    help="0보다 크면 시간 기준 다단계 목표: 흐른 시간이 이 값(시간) 이상이 될 때까지 실제 보상을 더하고 그 뒤에서만 Q로 이어 붙인다")
     p.add_argument("--nstep_max", type=int, default=64, help="다단계 목표에 묶는 최대 결정 수")
+    p.add_argument("--explore_rate_h", type=float, default=None,
+                   help="ε 탐색의 교체를 시간 기준으로: 쉬는 장비 1시간당 횟수. 결정 1번당 확률로 바꿔 explore_switch를 덮어쓴다 "
+                        "(0.6 = '다음 사건까지'에서 결정당 0.02와 같음)")
     p.add_argument("--explore_switch", type=float, default=None,
                    help="ε 탐색에서 교체를 고를 확률. 없으면 고를 수 있는 행동 중 고르게. 결정이 촘촘해서 고르게 뽑으면 교체를 남발한다")
     a = p.parse_args()
+    if a.explore_rate_h is not None:
+        a.explore_switch = G.per_decision_prob(a.explore_rate_h, a.wait_min)
+        print(f"explore_rate_h {a.explore_rate_h}/h, wait_min {a.wait_min} → 결정당 교체 탐색 확률 {a.explore_switch:.4f}", flush=True)
     use_up = not a.no_upstream
     tag = f"{'up' if use_up else 'noup'}{a.suffix}_s{a.seed}"
     OUT.mkdir(parents=True, exist_ok=True)
@@ -128,6 +134,7 @@ def main():
     log, t0 = [], time.time()
     best, best_step, path = float("inf"), -1, OUT / f"dqn_{tag}.pt"
     step, n_upd, r_sum, r_n, waits, losses = 0, 0, 0.0, 0, 0, []
+    sim_h = 0.0  # 모든 환경이 경험한 시뮬레이션 시간 합 (학습량을 날수 축으로 보기 위해)
     next_val = a.val_every
     while step < a.steps:
         eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / (a.eps_frac * a.steps))
@@ -150,6 +157,7 @@ def main():
             else:
                 buf.add(o, act, r * R_SCALE, o2, m2, info["dt_h"], float(term))
             r_sum += r; r_n += 1; waits += act == 0
+            sim_h += info["dt_h"]
             if term or trunc:
                 o2, _ = env.reset()
                 m2 = env.action_masks().copy()
@@ -174,7 +182,7 @@ def main():
         if step >= next_val or step >= a.steps:
             next_val += a.val_every
             v, vf = C.validate(ex, "dqn", q, use_up, False, a.wait_min)
-            row = dict(step=step, eps=eps, mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
+            row = dict(step=step, sim_days=sim_h / 24, eps=eps, mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
                        loss=float(np.mean(losses)) if losses else None, val=v, val_fam=vf, sec=time.time() - t0)
             log.append(row)
             if v < best:
