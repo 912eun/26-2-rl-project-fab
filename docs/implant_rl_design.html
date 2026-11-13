@@ -1,0 +1,1049 @@
+<title>Implant 가스 교체 RL 설계</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 레이아웃: 한 줄 본문 + 넓은 표는 각자 가로 스크롤. 상단에 할 일 5개 바로가기 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2230;
+  --muted: #5b6577;
+  --line: #dde2ea;
+  --accent: #2f5bd3;
+  --accent-soft: #e6ecfb;
+  --good: #1f7a4d;
+  --good-soft: #e3f3ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --code-bg: #eef1f6;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a1f28; --fg: #e4e8ef; --muted: #9aa4b5; --line: #2c3340;
+    --accent: #8aa6f5; --accent-soft: #232c45; --good: #6fd19c; --good-soft: #17301f;
+    --warn: #f0b765; --warn-soft: #34280f; --code-bg: #232935; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a1f28; --fg: #e4e8ef; --muted: #9aa4b5; --line: #2c3340;
+  --accent: #8aa6f5; --accent-soft: #232c45; --good: #6fd19c; --good-soft: #17301f;
+  --warn: #f0b765; --warn-soft: #34280f; --code-bg: #232935; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px; }
+header { display: flex; flex-direction: column; gap: 12px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-size: 30px; line-height: 1.3; margin: 0; text-wrap: balance; font-weight: 700; }
+h2 { font-size: 22px; line-height: 1.35; margin: 0; text-wrap: balance; font-weight: 700; display: flex; gap: 12px; align-items: baseline; }
+h2 .no { font-family: var(--font-mono); font-size: 15px; color: var(--accent); font-weight: 500; }
+h3 { font-size: 16.5px; margin: 0; font-weight: 600; }
+p { margin: 0; max-width: 72ch; }
+.lead { font-size: 16.5px; color: var(--fg); max-width: 72ch; }
+.meta { color: var(--muted); font-size: 13.5px; }
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 16px; }
+.block { display: flex; flex-direction: column; gap: 12px; }
+nav.todo { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+nav.todo a { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; color: var(--fg); text-decoration: none; }
+nav.todo a:hover, nav.todo a:focus-visible { border-color: var(--accent); outline: none; }
+nav.todo .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+nav.todo .t { font-weight: 600; font-size: 14.5px; }
+nav.todo .s { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.callout { background: var(--accent-soft); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; max-width: 80ch; }
+.callout.good { background: var(--good-soft); }
+.callout.warn { background: var(--warn-soft); }
+.callout b { font-weight: 600; }
+ul, ol { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; max-width: 76ch; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 12.5px; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.grp { font-weight: 600; white-space: nowrap; }
+code, .mono { font-family: var(--font-mono); font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--good-soft); color: var(--good); }
+.pill.mid { background: var(--warn-soft); color: var(--warn); }
+.pill.no { background: var(--code-bg); color: var(--muted); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.flow > div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.flow .k { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+.flow .v { font-size: 14px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.two > div { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+a { color: var(--accent); }
+/* 한 사이클 애니메이션 */
+:root { --g1: #2f6fd3; --g1s: #e3ecfb; --g2: #b0540f; --g2s: #fbeadb; --g3: #23824f; --g3s: #e0f2e8; --hot: #c0322b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --g1: #8fb3f7; --g1s: #1f2b44; --g2: #f0a865; --g2s: #3a2714; --g3: #79d6a2; --g3s: #15301f; --hot: #ff8a80; } }
+:root[data-theme="dark"] { --g1: #8fb3f7; --g1s: #1f2b44; --g2: #f0a865; --g2s: #3a2714; --g3: #79d6a2; --g3s: #15301f; --hot: #ff8a80; }
+.cyc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.cyc-top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; }
+.cyc-clock { font-family: var(--font-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.cyc-title { font-weight: 600; font-size: 16px; min-width: 0; flex: 1 1 260px; }
+.cyc-desc { color: var(--fg); max-width: 80ch; min-height: 3.4em; }
+.cyc-ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cyc-ctrl button { font: inherit; font-size: 13.5px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+.cyc-ctrl button:hover, .cyc-ctrl button:focus-visible { border-color: var(--accent); outline: none; }
+.cyc-ctrl input[type=range] { flex: 1 1 160px; accent-color: var(--accent); }
+.cyc-ctrl .step { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr); gap: 14px; }
+@media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pane-h { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+.pane-h code { font-size: 11.5px; }
+.queue { display: flex; flex-direction: column; gap: 6px; min-height: 60px; }
+.lot { border: 1px solid var(--line); border-left: 4px solid var(--gc); border-radius: 6px; padding: 6px 9px; background: var(--gs); display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 12.5px; line-height: 1.5; }
+.lot .id { font-family: var(--font-mono); font-weight: 600; grid-row: span 2; align-self: center; font-size: 13px; }
+.lot .kv { color: var(--fg); }
+.lot .kv span { color: var(--muted); }
+.lot .hot { color: var(--hot); font-weight: 600; }
+.empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+.machines { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.mc { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; display: flex; flex-direction: column; gap: 5px; background: var(--bg); min-width: 0; }
+.mc-h { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.mc-h b { font-family: var(--font-mono); font-size: 14px; }
+.st { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.st.busy { background: var(--good-soft); color: var(--good); }
+.st.hold { background: var(--warn-soft); color: var(--warn); }
+.st.setup { background: var(--accent-soft); color: var(--accent); }
+.st.pm, .st.idle { background: var(--code-bg); color: var(--muted); }
+.f { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; border-radius: 4px; padding: 1px 4px; margin: 0 -4px; }
+.f .k { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+.f .v { font-variant-numeric: tabular-nums; text-align: right; }
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 11.5px; padding: 0 6px; border-radius: 4px; background: var(--gs); color: var(--gc); font-weight: 600; }
+.g1 { --gc: var(--g1); --gs: var(--g1s); } .g2 { --gc: var(--g2); --gs: var(--g2s); } .g3 { --gc: var(--g3); --gs: var(--g3s); } .g0 { --gc: var(--muted); --gs: var(--code-bg); }
+.chg { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); } 100% { background: transparent; box-shadow: 0 0 0 0 transparent; } }
+.lot.chg { animation: flashlot 1.6s ease-out; }
+@keyframes flashlot { 0% { box-shadow: 0 0 0 2px var(--accent); transform: translateX(-6px); } 100% { box-shadow: 0 0 0 0 transparent; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chg, .lot.chg { animation: none; outline: 2px solid var(--accent); outline-offset: 1px; } }
+.lower { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 760px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.logt { font-family: var(--font-mono); font-size: 11.5px; }
+.logt td, .logt th { padding: 4px 8px; white-space: nowrap; }
+.logt tr.new td { background: var(--accent-soft); }
+.dec { border: 1px dashed var(--accent); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.dec .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.dec .act { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12.5px; }
+.dec .act.pick { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.dec .act.off { color: var(--muted); text-decoration: line-through; }
+.meter { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; }
+.meter .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.meter .tot { font-weight: 600; border-top: 1px solid var(--line); padding-top: 4px; }
+/* 장비 한 대 내부 (dashmotion 방식: stroke-dashoffset 흐름 + 움직이는 점) */
+.tool { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.tool-grid { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 820px) { .tool-grid { grid-template-columns: minmax(0, 1fr); } }
+.svgbox { overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.tl { font-family: var(--font-body); font-size: 12.5px; fill: var(--fg); font-weight: 600; }
+.ts { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+.tc { font-family: var(--font-mono); font-size: 10.5px; fill: var(--accent); }
+.body { fill: var(--bg); stroke: var(--muted); stroke-width: 1.4; }
+.magnet { fill: none; stroke: var(--code-bg); stroke-width: 38; stroke-linecap: round; }
+.magnet-edge { fill: none; stroke: var(--line); stroke-width: 42; stroke-linecap: round; }
+.pipe { fill: none; stroke: var(--line); stroke-width: 3; }
+.beam { fill: none; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 10 8; }
+.flowing { animation: dashmove .6s linear infinite; }
+.flow-slow { stroke-dasharray: 4 6; animation: dashmove 1.2s linear infinite; }
+@keyframes dashmove { to { stroke-dashoffset: -18; } }
+@media (prefers-reduced-motion: reduce) { .flowing, .flow-slow { animation: none; } }
+.vals { display: flex; flex-direction: column; gap: 4px; }
+.vals .f { font-size: 13px; padding: 3px 6px; margin: 0; }
+.vals .f .k { font-size: 11.5px; }
+.phases { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 560px) { .phases { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.phases button { font: inherit; font-size: 12px; line-height: 1.35; padding: 6px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; text-align: left; }
+.phases button[aria-current="true"] { border-color: var(--accent); color: var(--fg); background: var(--accent-soft); font-weight: 600; }
+.phases button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.qstrip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.foup { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 4px; background: var(--gs); color: var(--gc); font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; border: 1px solid var(--gc); }
+@media (max-width: 480px) { h1 { font-size: 24px; } h2 { font-size: 19px; } .wrap { gap: 44px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">강화학습개론 팀 프로젝트 · SMT2020 HVLM · 2026-11-12</div>
+  <h1>Implant 가스 교체 RL 설계</h1>
+  <p class="lead">장비군 하나(implant)의 작은 환경에서 RL을 학습하고, 그 정책을 SMT2020 공장 전체에 넣어 공장 지표까지 확인하는 계획입니다. 팀에서 정한 할 일 다섯 가지 순서로 정리했습니다.</p>
+  <p class="meta">자료 위치: <code>~/서강대/26-2/강개론/project</code>. 세부 문서 <code>docs/implant_sar_mapping.md</code>, 상태 점검 <code>results/state_check/report_240d.txt</code>.</p>
+</header>
+
+<nav class="todo" aria-label="할 일 다섯 가지">
+  <a href="#env"><span class="n">1</span><span class="t">환경 통일</span><span class="s">어떻게 보정했고 공장을 얼마나 재현하나</span></a>
+  <a href="#state"><span class="n">2</span><span class="t">상태(s) 통일</span><span class="s">두 환경이 같은 함수로 같은 값을 계산</span></a>
+  <a href="#ar"><span class="n">3</span><span class="t">행동(a)·보상(r) 후보</span><span class="s">데이터 출처까지 매핑</span></a>
+  <a href="#method"><span class="n">4</span><span class="t">방법론 후보</span><span class="s">수업 슬라이드와 과제 조건 기준</span></a>
+  <a href="#run"><span class="n">5</span><span class="t">간단히 돌려 보기</span><span class="s">직접 구현한 PPO·DQN, 시드 10개씩. DQN이 처음 cov를 넘음</span></a>
+  <a href="#tool"><span class="n">+</span><span class="t">장비 한 대 안</span><span class="s">가스·빔·웨이퍼 흐름과 컬럼 변화</span></a>
+  <a href="#cycle"><span class="n">+</span><span class="t">한 사이클 따라가기</span><span class="s">장비·lot 컬럼이 바뀌는 순서 애니메이션</span></a>
+  <a href="#volume"><span class="n">+</span><span class="t">기간과 데이터 양</span><span class="s">몇 일, 몇 건, 왜 이렇게 만들었나</span></a>
+  <a href="#diffusion"><span class="n">+</span><span class="t">확산로 후보 검토</span><span class="s">팀원 리서치를 우리 데이터로 대조</span></a>
+</nav>
+
+<section id="problem">
+  <h2>풀려는 결정</h2>
+  <p>implant 장비는 가스 3종 중 하나가 걸린 상태로 lot을 처리합니다. 장비가 비었는데 지금 걸린 가스의 lot은 없고 다른 가스 lot만 있으면, 장비는 <b>지금 다른 가스로 바꿀지, 바꾼다면 어느 가스로 바꿀지, 아니면 잠깐 기다릴지</b> 정해야 합니다.</p>
+  <div class="flow">
+    <div><span class="k">바꾸면</span><span class="v">60~80분 동안 처리를 못 하고, 그 뒤 최소 7 lot을 그 가스로 처리해야 합니다.</span></div>
+    <div><span class="k">기다리면</span><span class="v">지금 가스 lot이 곧 오면 교체를 아낍니다. 안 오면 다른 가스 lot이 계속 밀립니다.</span></div>
+    <div><span class="k">기본 규칙 (lssu)</span><span class="v">지금 가스 lot이 떨어지는 순간 바로 바꿉니다. 앞을 보지 않습니다.</span></div>
+    <div><span class="k">지금까지 최강 규칙 (cov)</span><span class="v">대기 lot ÷ (그 가스를 건 장비 + 1)이 기준 이상이면 바꾸고, 아니면 정해진 시간까지 기다립니다.</span></div>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>장비군</th><th class="num">장비 수</th><th class="num">교체 시간</th><th class="num">route_3 방문</th><th class="num">route_4 방문</th><th class="num">기본 규칙 방문당 대기</th></tr></thead>
+    <tbody>
+      <tr><td>Implant_128</td><td class="num">10대</td><td class="num">72분</td><td class="num">12회</td><td class="num">4회</td><td class="num">2.07시간</td></tr>
+      <tr><td>Implant_132</td><td class="num">8대</td><td class="num">60분</td><td class="num">5회</td><td class="num">6회</td><td class="num">2.06시간</td></tr>
+      <tr><td>Implant_91</td><td class="num">6대</td><td class="num">80분</td><td class="num">6회</td><td class="num">2회</td><td class="num">3.67시간</td></tr>
+    </tbody>
+  </table></div>
+  <p class="meta">세 장비군은 규칙이 같고 크기만 다릅니다. 그래서 정책 하나를 세 장비군에 같이 쓰기로 했습니다. 장비 수와 교체 시간을 상태로 받으므로 장비가 늘거나 줄어도(증설, LVHM 11/7/7대) 그대로 쓸 수 있습니다.</p>
+</section>
+
+<section id="tool">
+  <h2>장비 한 대 안에서 일어나는 일</h2>
+  <p>implant 장비(이온 주입기)는 가스 박스의 도펀트 가스를 이온 소스에서 이온으로 만들고, 자석으로 원하는 이온만 골라 가속한 뒤 웨이퍼에 쏩니다. 웨이퍼 25장이 든 통(FOUP) 하나가 lot 하나입니다. 아래 그림은 한 장비가 lot 처리 → 결정 순간 → 가스 교체 → 새 가스로 처리 → PM을 거치는 동안 시뮬레이터 컬럼이 어떻게 바뀌는지 보여 줍니다. 단계 버튼을 눌러 원하는 장면으로 갈 수 있습니다.</p>
+  <div class="tool" id="tool">
+    <div class="phases" id="tool-phases" role="group" aria-label="장면 선택"></div>
+    <div class="tool-grid">
+      <div class="svgbox">
+        <svg viewBox="0 0 920 330" role="img" aria-labelledby="tool-svg-t">
+          <title id="tool-svg-t">이온 주입기 내부 구조와 가스, 빔, 웨이퍼 흐름</title>
+          <!-- 가스 박스 -->
+          <rect class="body" x="14" y="40" width="150" height="190" rx="8"/>
+          <g id="cyl"></g>
+          <path id="manifold" class="pipe" d="M150 160 L196 160"/>
+          <!-- 이온 소스 -->
+          <rect class="body" x="196" y="122" width="70" height="76" rx="6"/>
+          <circle id="arc" cx="231" cy="160" r="20" fill="var(--line)"/>
+          <path id="exhaust" class="pipe" d="M231 198 L231 262 L300 262" />
+          <!-- 질량 분석 자석 -->
+          <path class="magnet-edge" d="M300 160 C360 160 380 200 440 200"/>
+          <path class="magnet" d="M300 160 C360 160 380 200 440 200"/>
+          <!-- 분리 슬릿 -->
+          <rect x="468" y="172" width="8" height="18" fill="var(--muted)"/><rect x="468" y="210" width="8" height="18" fill="var(--muted)"/>
+          <!-- 가속관 -->
+          <g id="rings"></g>
+          <!-- 엔드 스테이션, 로드락, 로드 포트 -->
+          <rect class="body" x="630" y="142" width="130" height="116" rx="8"/>
+          <rect id="platen" x="684" y="168" width="10" height="64" rx="2" fill="var(--muted)"/>
+          <rect class="body" x="772" y="168" width="54" height="64" rx="4"/>
+          <rect id="foup" x="842" y="164" width="60" height="72" rx="6" fill="var(--code-bg)" stroke="var(--muted)" stroke-width="1.4"/>
+          <text id="foup-t" x="872" y="205" text-anchor="middle" class="ts">비어 있음</text>
+          <!-- 빔 -->
+          <path id="beam" class="beam" d="M266 160 L300 160 C360 160 380 200 440 200 L690 200" stroke="var(--line)"/>
+          <ellipse id="wafer" cx="872" cy="200" rx="4" ry="22" fill="var(--muted)" opacity="0"/>
+          <!-- 정비 표시 -->
+          <g id="pm-mark" opacity="0">
+            <rect x="196" y="20" width="564" height="290" rx="10" fill="var(--warn-soft)" opacity=".55"/>
+            <text x="478" y="96" text-anchor="middle" class="tl" style="font-size:16px;fill:var(--warn)">PM 중: 소스 청소·부품 교체 (13.3시간)</text>
+          </g>
+          <!-- 이름표 -->
+          <text x="89" y="252" text-anchor="middle" class="tl">가스 박스</text>
+          <text x="89" y="268" text-anchor="middle" class="tc">current_setup</text>
+          <text x="231" y="112" text-anchor="middle" class="tl">이온 소스</text>
+          <text x="370" y="132" text-anchor="middle" class="tl">질량 분석 자석</text>
+          <text x="370" y="148" text-anchor="middle" class="ts">원하는 이온만 휘어 통과</text>
+          <text x="560" y="150" text-anchor="middle" class="tl">가속관</text>
+          <text x="695" y="276" text-anchor="middle" class="tl">엔드 스테이션</text>
+          <text x="695" y="292" text-anchor="middle" class="tc">pieces_until_maintenance</text>
+          <text x="799" y="160" text-anchor="middle" class="ts">로드락</text>
+          <text x="872" y="156" text-anchor="middle" class="tl">FOUP = lot</text>
+          <text x="872" y="254" text-anchor="middle" class="tc">machine_time</text>
+          <text x="300" y="282" class="ts">배기·퍼지</text>
+          <text id="wcount" x="695" y="130" text-anchor="middle" class="tl"></text>
+        </svg>
+      </div>
+      <div class="pane">
+        <div class="cyc-top"><span class="cyc-clock" id="tool-clock">09:00</span><span class="st" id="tool-st"></span></div>
+        <div class="vals" id="tool-vals"></div>
+        <div class="cyc-ctrl"><button type="button" id="tool-play">일시정지</button></div>
+      </div>
+    </div>
+    <p class="cyc-desc" id="tool-desc"></p>
+    <div class="qstrip" id="tool-q"></div>
+  </div>
+  <p class="meta">장비 내부 구조는 일반적인 이온 주입기를 단순화한 그림입니다. SMT2020은 내부를 모델링하지 않고, lot당 처리 시간(<code>PTIME</code> × 25장), 가스 교체 시간(<code>STIME</code>), 최소 연속 처리(<code>MINRUN</code>), PM 주기(처리 매수)만 씁니다. 가스 이름도 <code>SU132_1~3</code>처럼 추상화되어 있습니다. 움직임 표현은 GitHub의 <a href="https://github.com/csthink/dashmotion" target="_blank" rel="noopener">dashmotion</a> 스킬 방식(흐르는 점선, 경로를 따라 움직이는 점)을 따랐습니다.</p>
+</section>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg', $ = id => document.getElementById(id);
+  const GC = g => g ? `var(--g${g})` : 'var(--line)', GS = g => g ? `var(--g${g}s)` : 'var(--code-bg)';
+  const GN = { 1: 'SU132_1', 2: 'SU132_2', 3: 'SU132_3' };
+  // 가스통 3개와 가속관 고리
+  const cyl = $('cyl');
+  [1, 2, 3].forEach((g, i) => {
+    const x = 28 + i * 44;
+    cyl.insertAdjacentHTML('beforeend',
+      `<rect x="${x}" y="70" width="32" height="110" rx="12" fill="${GS(g)}" stroke="${GC(g)}" stroke-width="1.5"/>
+       <text x="${x + 16}" y="62" text-anchor="middle" class="ts">${g}</text>
+       <path id="pipe${g}" class="pipe" d="M${x + 16} 180 L${x + 16} 200 L150 200 L150 160"/>
+       <circle id="valve${g}" cx="${x + 16}" cy="192" r="5" fill="var(--line)" stroke="var(--muted)"/>`);
+  });
+  cyl.insertAdjacentHTML('beforeend', '<text x="89" y="222" text-anchor="middle" class="ts">SU132_1 · 2 · 3</text>');
+  for (let i = 0; i < 5; i++) $('rings').insertAdjacentHTML('beforeend', `<rect x="${520 + i * 18}" y="176" width="8" height="48" rx="2" fill="none" stroke="var(--muted)" stroke-width="1.4"/>`);
+
+  // 장면: dur(초), sim(분)
+  const P = [
+    { key: 'p1', label: '① SU132_1 lot 처리', dur: 6, sim: 25, st: 'busy', gas: 1, lot: { id: 101, g: 1 }, pcs: [75, 50], mrl: '—', q: [3, 3],
+      d: '웨이퍼를 한 장씩 꺼내 로드락을 거쳐 엔드 스테이션에 올리고 이온을 쏜 뒤 FOUP로 돌려보냅니다. 25장이 끝나면 lot 하나가 끝납니다(machine_time 25분). 한 장마다 pieces_until_maintenance가 1씩 줄어듭니다.' },
+    { key: 'h', label: '② 결정 순간', dur: 3.5, sim: 15, st: 'hold', gas: 1, lot: null, pcs: [50, 50], mrl: '—', q: [3, 3], hold: true,
+      d: 'lot 101이 끝났는데 대기열에 SU132_1 lot이 없습니다. SU132_3 lot만 2개 있습니다. 가스는 그대로 걸어 둔 채 빔을 멈추고 "기다릴까, SU132_3로 바꿀까"를 정합니다. 기다리기를 고르면 hold_since가 찍힙니다. 이 장면에서는 15분 기다린 뒤 바꾸기로 했습니다.' },
+    { key: 's', label: '③ 가스 교체 60분', dur: 6, sim: 60, st: 'setup', gas: 'sw', lot: null, pcs: [50, 50], mrl: '7', q: [3, 3],
+      d: 'SU132_1 밸브를 잠그고, 소스 안 가스를 빼내 퍼지한 뒤 SU132_3 밸브를 열고 빔이 안정될 때까지 기다립니다. 이 동안 웨이퍼를 처리할 수 없습니다. SMT2020은 이 과정 전체를 "셋업 60분" 하나로 둡니다. 교체가 끝나면 current_setup = SU132_3, min_runs_left = 7이 됩니다.' },
+    { key: 'p2', label: '④ SU132_3 lot 처리', dur: 6, sim: 25, st: 'busy', gas: 3, lot: { id: 106, g: 3 }, pcs: [50, 25], mrl: '6', q: [3],
+      d: '새 가스로 첫 lot을 처리합니다. min_runs_left가 6이 되었습니다. 7 lot을 채우기 전에는 다른 가스 lot이 쌓여도 이 장비는 가스를 바꿀 수 없습니다.' },
+    { key: 'p3', label: '⑤ 같은 가스 다음 lot', dur: 6, sim: 25, st: 'busy', gas: 3, lot: { id: 107, g: 3 }, pcs: [25, 0], mrl: '5', q: [2],
+      d: '대기열에서 같은 가스 lot을 바로 집으므로 교체가 없습니다. 그동안 SU132_2 lot이 새로 도착해 다른 장비를 기다립니다. pieces_until_maintenance가 0이 됩니다.' },
+    { key: 'pm', label: '⑥ PM', dur: 4.5, sim: 798, st: 'pm', gas: 0, lot: null, pcs: [0, 0], mrl: '—', q: [2, 3],
+      d: '다음 lot을 넣으려는 순간 PM 차례가 되어 13.3시간 동안 장비를 멈춥니다. PM이 끝나면 가스가 풀려 current_setup이 빈 값이 됩니다. 이때 장비는 어차피 가스를 걸어야 하므로 RL이 아니라 규칙이 가스를 고릅니다.' },
+  ];
+  const ST = { busy: ['처리 중', 'busy'], hold: ['기다리는 중', 'hold'], setup: ['가스 교체 중', 'setup'], pm: ['PM 중', 'pm'] };
+  const total = P.reduce((a, p) => a + p.dur, 0);
+  const starts = []; P.reduce((a, p) => { starts.push(a); return a + p.dur; }, 0);
+  const simStart = []; P.reduce((a, p) => { simStart.push(a); return a + p.sim; }, 540);
+  P.forEach((p, i) => $('tool-phases').insertAdjacentHTML('beforeend', `<button type="button" data-i="${i}">${p.label}</button>`));
+  const clock = m => { m = Math.round(m) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+  const beam = $('beam'), wafer = $('wafer'), arc = $('arc');
+  let lastPhase = -1, prevVals = {};
+  function setGas(open) { [1, 2, 3].forEach(g => {
+    $('valve' + g).setAttribute('fill', g === open ? GC(g) : 'var(--line)');
+    const pp = $('pipe' + g); pp.style.stroke = g === open ? GC(g) : ''; pp.classList.toggle('flow-slow', g === open); });
+    $('manifold').style.stroke = open ? GC(open) : ''; $('manifold').classList.toggle('flow-slow', !!open); }
+  function frame(t) {
+    let i = P.length - 1; while (starts[i] > t) i--;
+    const p = P[i], u = (t - starts[i]) / p.dur;
+    if (i !== lastPhase) {
+      lastPhase = i;
+      [...$('tool-phases').children].forEach((b, j) => b.setAttribute('aria-current', j === i ? 'true' : 'false'));
+      $('tool-desc').textContent = p.d;
+      const [stt, stc] = ST[p.st]; $('tool-st').textContent = stt; $('tool-st').className = 'st ' + stc;
+      $('tool-q').innerHTML = '같은 장비군 대기열: ' + (p.q.length ? p.q.map(g => `<span class="foup g${g}">FOUP ${GN[g]}</span>`).join('') : '비어 있음');
+      $('pm-mark').setAttribute('opacity', p.st === 'pm' ? 1 : 0);
+      $('exhaust').style.stroke = p.st === 'setup' ? 'var(--muted)' : ''; $('exhaust').classList.toggle('flowing', p.st === 'setup');
+      const f = $('foup'), ft = $('foup-t');
+      if (p.lot) { f.setAttribute('fill', GS(p.lot.g)); f.setAttribute('stroke', GC(p.lot.g)); ft.textContent = 'lot ' + p.lot.id; }
+      else { f.setAttribute('fill', 'var(--code-bg)'); f.setAttribute('stroke', 'var(--muted)'); ft.textContent = '비어 있음'; }
+    }
+    // 가스, 소스, 빔
+    let gas = p.gas;
+    if (gas === 'sw') gas = u < 0.25 ? 1 : (u < 0.7 ? 0 : 3);
+    setGas(p.st === 'pm' ? 0 : gas);
+    arc.setAttribute('fill', gas ? GC(gas) : 'var(--line)');
+    arc.setAttribute('opacity', p.st === 'busy' ? 0.55 + 0.45 * Math.abs(Math.sin(t * 6)) : (p.gas === 'sw' && u > 0.7 ? 0.4 + 0.6 * ((u - 0.7) / 0.3) : 0.35));
+    const on = p.st === 'busy';
+    beam.setAttribute('stroke', on ? GC(gas) : 'var(--line)'); beam.classList.toggle('flowing', on);
+    // 웨이퍼: FOUP(872) → 플래튼(689) → FOUP
+    let n = 0;
+    if (on) {
+      const k = u * 25; n = Math.min(25, Math.floor(k) + 1); const v = k - Math.floor(k);
+      const x = v < 0.4 ? 872 - (183 * v / 0.4) : (v < 0.75 ? 689 : 689 + 183 * (v - 0.75) / 0.25);
+      wafer.setAttribute('cx', x); wafer.setAttribute('opacity', 1); wafer.setAttribute('fill', v >= 0.4 && v < 0.75 ? GC(gas) : 'var(--muted)');
+      $('platen').setAttribute('fill', v >= 0.4 && v < 0.75 ? GC(gas) : 'var(--muted)');
+      $('wcount').textContent = `웨이퍼 ${n} / 25`;
+    } else { wafer.setAttribute('opacity', 0); $('platen').setAttribute('fill', 'var(--muted)'); $('wcount').textContent = p.st === 'setup' ? `교체 ${Math.round(u * 60)} / 60분` : ''; }
+    const pcs = on ? p.pcs[0] - n : p.pcs[1];
+    const cs = p.st === 'pm' ? '빈 값' : (gas ? GN[gas] : '교체 중');
+    const vals = {
+      '상태': ST[p.st][0], 'current_setup': cs, 'min_runs_left': p.gas === 'sw' && u < 0.7 ? '—' : p.mrl,
+      'pieces_until_maintenance': pcs + '매', '처리 lot': p.lot ? `lot ${p.lot.id} (${n}/25장)` : '—',
+      'hold_since': p.hold ? clock(simStart[i]) : '—',
+    };
+    const box = $('tool-vals');
+    Object.entries(vals).forEach(([k, v], j) => {
+      let row = box.children[j];
+      if (!row) { box.insertAdjacentHTML('beforeend', `<div class="f"><span class="k">${k}</span><span class="v"></span></div>`); row = box.children[j]; }
+      const html = k === 'current_setup' && gas && p.st !== 'pm' ? `<span class="chip g${gas}">${v}</span>` : v;
+      const cell = row.children[1];
+      if (cell.innerHTML !== html) {
+        cell.innerHTML = html;
+        if (prevVals[k] !== undefined && k !== '처리 lot' && !(k === 'pieces_until_maintenance' && on)) { row.classList.remove('chg'); void row.offsetWidth; row.classList.add('chg'); }
+      }
+    });
+    prevVals = vals;
+    $('tool-clock').textContent = clock(simStart[i] + p.sim * u);
+  }
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let t = 0, playing = !reduce, last = null;
+  function loop(ts) {
+    if (playing) { if (last !== null) t = (t + (ts - last) / 1000) % total; last = ts; frame(t); } else last = null;
+    requestAnimationFrame(loop);
+  }
+  $('tool-play').onclick = () => { playing = !playing; $('tool-play').textContent = playing ? '일시정지' : '재생 ▶'; };
+  $('tool-phases').onclick = e => { const b = e.target.closest('button'); if (!b) return; t = starts[+b.dataset.i] + P[+b.dataset.i].dur * (reduce ? 0.5 : 0.02); lastPhase = -1; frame(t); };
+  $('tool-play').textContent = playing ? '일시정지' : '재생 ▶';
+  frame(reduce ? P[0].dur * 0.5 : 0); requestAnimationFrame(loop);
+})();
+</script>
+
+<section id="cycle">
+  <h2>한 사이클 따라가기: 컬럼이 언제 바뀌나</h2>
+  <p>Implant_132의 2시간 20분을 예로 들었습니다. lot이 도착하고, 기다리고, 투입되고, 장비가 가스를 바꾸는 동안 장비 컬럼과 lot 컬럼이 어떻게 바뀌는지, <code>events_v2.csv</code>에 어떤 행이 쌓이는지, 결정 순간에 무엇을 보는지를 순서대로 보여 줍니다. 방금 바뀐 칸은 파란 테두리로 표시됩니다.</p>
+  <div class="cyc" id="cyc">
+    <div class="cyc-top">
+      <span class="cyc-clock" id="cyc-clock">09:00</span>
+      <span class="cyc-title" id="cyc-title"></span>
+    </div>
+    <p class="cyc-desc" id="cyc-desc"></p>
+    <div class="cyc-ctrl">
+      <button type="button" id="cyc-prev" aria-label="이전 장면">◀ 이전</button>
+      <button type="button" id="cyc-play">일시정지</button>
+      <button type="button" id="cyc-next" aria-label="다음 장면">다음 ▶</button>
+      <input type="range" id="cyc-range" min="0" max="12" value="0" aria-label="장면 선택">
+      <span class="step" id="cyc-step">1 / 13</span>
+    </div>
+    <div class="stage">
+      <div class="pane">
+        <div class="pane-h">대기열 <code>machine.waiting_lots</code> · 작은 환경 <code>q[g]</code>, <code>qh[g]</code></div>
+        <div class="queue" id="cyc-queue"></div>
+      </div>
+      <div class="pane">
+        <div class="pane-h">장비 (장비군 8대 중 3대) <code>Machine</code> · 작은 환경 <code>M</code></div>
+        <div class="machines" id="cyc-machines"></div>
+      </div>
+    </div>
+    <div class="lower">
+      <div class="pane">
+        <div class="pane-h">기록 <code>events_v2.csv</code>에 쌓이는 행 (컬럼 일부)</div>
+        <div class="tbl"><table class="logt">
+          <thead><tr><th>t</th><th>kind</th><th>lot</th><th>setup</th><th>priority</th><th>machine</th><th>machine_setup_before</th><th>machine_time</th></tr></thead>
+          <tbody id="cyc-log"></tbody>
+        </table></div>
+      </div>
+      <div class="pane">
+        <div class="pane-h" id="cyc-side-h">보상 R1 누적 (09:00부터)</div>
+        <div id="cyc-side"></div>
+      </div>
+    </div>
+  </div>
+  <p class="meta">장면은 실제 규칙(최소 7 lot, 교체 60분, PM은 lot을 투입하려는 순간 발생, cov 기준 Q=3·최대 대기 4시간)대로 만든 예시이고, lot 번호와 시각은 설명용입니다. 이 사이 다른 5대의 사건은 생략했습니다. 가스 이름은 <code>SU132_1~3</code>입니다.</p>
+</section>
+
+<script>
+(() => {
+  const G = { 1: 'SU132_1', 2: 'SU132_2', 3: 'SU132_3' };
+  const L = { 103: [2, 10, '08:40'], 104: [1, 10, '09:05'], 105: [1, 10, '09:22'], 106: [3, 10, '09:25'], 107: [3, 20, '09:25'], 108: [2, 10, '11:20'], 109: [2, 10, '11:20'] };
+  const ST = { busy: '처리 중', idle: '비어 있음', hold: '기다리는 중', setup: '가스 교체 중', pm: 'PM 중' };
+  const m0 = {
+    M1: { st: 'busy', gas: 1, mrl: null, pcs: 3050, lot: 101, until: '09:20', hold: null },
+    M2: { st: 'busy', gas: 2, mrl: null, pcs: 0, lot: 102, until: '09:15', hold: null },
+    M3: { st: 'hold', gas: 1, mrl: null, pcs: 1200, lot: null, until: null, hold: '08:55' },
+  };
+  const F = [
+    { t: '09:00', title: '시작 상태', q: [103], ch: [],
+      d: 'M1은 SU132_1로 lot 101을, M2는 SU132_2로 lot 102를 처리 중입니다. M3는 SU132_1이 걸린 채 비어 있습니다. 대기열에는 SU132_2 lot 103만 있어서, M3는 08:55부터 가스를 바꾸지 않고 기다리는 중입니다.' },
+    { t: '09:05', title: 'lot 104 도착 (SU132_1)', q: [103, 104], ch: ['q104'], log: [['09:05', 'arrive', 104, 1, 10, '', '', '']],
+      d: 'lot이 implant 공정에 도착하면 대기열에 들어가고 free_since(대기 시작 시각)가 찍힙니다. 기록에는 arrive 행이 하나 생깁니다. 작은 환경은 이 행을 그대로 다시 틀어 줍니다.' },
+    { t: '09:05', title: 'M3가 lot 104 투입 (같은 가스라 결정 없음)', q: [103], ch: ['M3.st', 'M3.lot', 'M3.pcs', 'M3.hold'], m: { M3: { st: 'busy', lot: 104, until: '09:30', pcs: 1175, hold: null } },
+      log: [['09:05', 'start', 104, 1, 10, 'M3', 1, '25분']],
+      d: '지금 걸린 가스의 lot이 있으면 그냥 처리합니다. PM까지 남은 매수(pieces_until_maintenance)가 25매 줄고, start 행이 생깁니다. machine_setup_before가 setup과 같으므로 교체가 없었다는 뜻입니다.' },
+    { t: '09:15', title: 'M2 처리 끝 → lot 103 대신 PM 시작', q: [103], ch: ['M2.st', 'M2.gas', 'M2.lot'], m: { M2: { st: 'pm', gas: null, lot: null, until: '22:33' } },
+      d: '이 예시에서 M2는 SU132_2를 건 유일한 장비라 lot 103을 넣으려 했지만, PM까지 남은 매수가 0이라 투입하려는 순간 PM이 시작됩니다(13.3시간). PM이 끝나면 가스가 풀리므로 current_setup이 빈 값이 됩니다. lot 103은 계속 기다립니다.' },
+    { t: '09:20', title: '결정 ① M1이 비었는데 SU132_1 lot이 없음', q: [103], ch: ['M1.st', 'M1.lot', 'M1.hold'], m: { M1: { st: 'hold', lot: null, until: null, hold: '09:20' } },
+      dec: { who: 'M1', g0: 1, rows: [[2, 1, 0], [3, 0, 0]], acts: [['기다리기', 'pick'], ['SU132_2로 교체', ''], ['SU132_3로 교체', 'off']],
+        note: 'SU132_2 점수 = 대기 1 ÷ (그 가스 장비 0 + 1) = 1.0 < Q 3. 기다린 시간 0 < 4시간이므로 기다립니다. hold_since가 찍힙니다.' },
+      d: '여기가 RL이 끼어드는 자리입니다. 장비가 비었고, 현재 가스 lot이 없고, 다른 가스 lot이 있습니다. 상태 29개를 계산해 정책에 넘기고, 정책은 기다리기 / 교체 중에서 고릅니다. 대기 lot이 없는 가스로의 교체는 막힙니다(마스킹). 이 장면은 cov 규칙의 선택입니다.' },
+    { t: '09:22', title: 'lot 105 도착 (SU132_1) → M1이 바로 투입', q: [103], ch: ['M1.st', 'M1.lot', 'M1.pcs', 'M1.hold'], m: { M1: { st: 'busy', lot: 105, until: '09:44', pcs: 3025, hold: null } },
+      log: [['09:22', 'arrive', 105, 1, 10, '', '', ''], ['09:22', 'start', 105, 1, 10, 'M1', 1, '22분']],
+      d: '기다린 보람이 있었습니다. 2분 만에 현재 가스 lot이 와서 60분짜리 교체를 피했습니다. 상태 F(앞 공정 lot 수)가 이런 도착을 미리 알려 주는 정보입니다.' },
+    { t: '09:25', title: 'lot 106, hot lot 107 도착 (SU132_3)', q: [103, 106, 107], ch: ['q106', 'q107'], log: [['09:25', 'arrive', 106, 3, 10, '', '', ''], ['09:25', 'arrive', 107, 3, 20, '', '', '']],
+      d: 'priority 20 이상은 hot lot입니다. 지금 비어 있는 장비가 없으므로 둘 다 대기열에 들어갑니다. hot lot은 별도 대기열(qh)에 들어가고 같은 가스 안에서 먼저 처리됩니다.' },
+    { t: '09:30', title: 'M3 빔 → hot lot 때문에 SU132_3로 교체', q: [103, 106], ch: ['M3.st', 'M3.gas', 'M3.mrl', 'M3.lot', 'M3.pcs'], setup: 60,
+      m: { M3: { st: 'setup', gas: 3, mrl: 7, lot: 107, until: '10:30', pcs: 1150 } },
+      log: [['09:30', 'start', 107, 3, 20, 'M3', 1, '25분']],
+      d: 'hot lot이 있으면 RL이 결정하지 않고 규칙이 바로 처리합니다. 가스가 SU132_1 → SU132_3로 바뀌고 60분 동안 처리를 못 합니다. 교체 뒤 최소 7 lot을 이 가스로 처리해야 하므로 min_runs_left = 7, 이 동안 M3는 다른 가스로 못 바꿉니다. 기록의 machine_setup_before ≠ setup이 교체의 표시입니다.' },
+    { t: '09:44', title: '결정 ② M1이 다시 비었음', q: [103, 106], ch: ['M1.st', 'M1.lot', 'M1.hold'], m: { M1: { st: 'hold', lot: null, until: null, hold: '09:44' } },
+      dec: { who: 'M1', g0: 1, rows: [[2, 1, 0], [3, 1, 1]], acts: [['기다리기', 'pick'], ['SU132_2로 교체', ''], ['SU132_3로 교체', '']],
+        note: 'SU132_2 = 1 ÷ (0+1) = 1.0, SU132_3 = 1 ÷ (M3 1대 + 1) = 0.5. 둘 다 Q 3보다 작아 다시 기다립니다.' },
+      d: '같은 장비가 몇 분~몇 시간 간격으로 계속 다시 결정합니다. 결정 사이 시간이 들쭉날쭉해서, 할인을 결정 횟수가 아니라 흐른 시간으로 합니다.' },
+    { t: '10:30', title: 'M3 교체 끝 → lot 107 처리 시작', q: [103, 106], ch: ['M3.st', 'M3.mrl'], m: { M3: { st: 'busy', mrl: 6, until: '10:55' } },
+      d: '교체가 끝나야 처리가 시작됩니다. 최소 연속 처리 남은 수가 7 → 6으로 줄어듭니다. 그동안 lot 103(SU132_2)과 106(SU132_3)은 계속 대기 시간을 쌓습니다.' },
+    { t: '10:55', title: 'M3가 lot 106 투입 (잠금 중, 같은 가스)', q: [103], ch: ['M3.lot', 'M3.mrl', 'M3.pcs'], m: { M3: { lot: 106, mrl: 5, until: '11:20', pcs: 1125 } },
+      log: [['10:55', 'start', 106, 3, 10, 'M3', 3, '25분']],
+      d: 'lot 106은 09:25부터 1시간 30분을 기다렸습니다. 투입 순간 waiting_time에 더해집니다. min_runs_left는 5가 됩니다.' },
+    { t: '11:20', title: '결정 ③ SU132_2 lot이 몰려 옴 → M1 교체', q: [108, 109], ch: ['q108', 'q109', 'M1.st', 'M1.gas', 'M1.mrl', 'M1.lot', 'M1.pcs', 'M1.hold', 'M3.st', 'M3.lot'], setup: 60,
+      m: { M1: { st: 'setup', gas: 2, mrl: 7, lot: 103, until: '12:20', pcs: 3000, hold: null }, M3: { st: 'idle', lot: null, until: null } },
+      log: [['11:20', 'arrive', 108, 2, 10, '', '', ''], ['11:20', 'arrive', 109, 2, 10, '', '', ''], ['11:20', 'start', 103, 2, 10, 'M1', 1, '25분']],
+      dec: { who: 'M1', g0: 1, rows: [[2, 3, 0], [3, 0, 1]], acts: [['기다리기', ''], ['SU132_2로 교체', 'pick'], ['SU132_3로 교체', 'off']],
+        note: 'SU132_2 = 3 ÷ (0+1) = 3.0 ≥ Q 3 → 교체. 가장 오래 기다린 lot 103부터 넣습니다. 같은 시각에 빈 M3는 SU132_3 잠금(남은 5)이라 SU132_2 lot을 받을 수 없습니다.' },
+      d: '도착이 몰려 오면 점수가 기준을 넘습니다. M2가 PM 중이라 SU132_2를 맡은 장비가 0대인 것도 점수를 키웠습니다. 상태 C(나머지 장비의 가스·잠금)가 이 정보를 담습니다.' },
+    { t: '11:20', title: '정리: lot 103의 지연과 보상', q: [108, 109], ch: [], sum: true,
+      d: 'lot 103은 08:40에 도착해 11:20에 투입됐습니다. waiting_time 2시간 40분에, 자기 때문에 생긴 교체 60분을 더하면 주 지표 D는 3시간 40분입니다. 보상 R1은 결정 사이마다 (대기 lot 수 × 흐른 시간 + 교체 시간)을 장비 수로 나눠 음수로 준 것이고, 다 더하면 장비군 전체의 D 합과 같습니다.' },
+  ];
+  // 장면별 전체 상태 만들기
+  const S = []; let ms = JSON.parse(JSON.stringify(m0)); const logs = []; let area = 0, setupMin = 0, prev = null;
+  const tm = s => +s.slice(0, 2) * 60 + +s.slice(3);
+  F.forEach((f, i) => {
+    if (f.m) for (const k in f.m) ms[k] = Object.assign({}, ms[k], f.m[k]);
+    if (prev) area += prev.q.length * (tm(f.t) - tm(prev.t));
+    if (f.setup) setupMin += f.setup;
+    const newLog = (f.log || []).map(r => ({ r, i }));
+    logs.push(...newLog);
+    S.push({ f, ms: JSON.parse(JSON.stringify(ms)), log: logs.slice(), area, setupMin, i });
+    prev = f;
+  });
+  const $ = id => document.getElementById(id);
+  const chip = g => g ? `<span class="chip g${g}">${G[g]}</span>` : '<span class="chip g0">빈 값</span>';
+  const wait = (fs, t) => { const d = tm(t) - tm(fs); return d >= 60 ? `${Math.floor(d / 60)}시간 ${d % 60}분` : `${d}분`; };
+  const hm = m => `${Math.floor(m / 60)}시간 ${String(Math.round(m % 60)).padStart(2, '0')}분`;
+  function render(k) {
+    const s = S[k], f = s.f, ch = new Set(f.ch);
+    $('cyc-clock').textContent = f.t; $('cyc-title').textContent = f.title; $('cyc-desc').textContent = f.d;
+    $('cyc-step').textContent = `${k + 1} / ${S.length}`; $('cyc-range').value = k;
+    $('cyc-queue').innerHTML = f.q.length ? f.q.map(id => { const [g, p, fs] = L[id];
+      return `<div class="lot g${g}${ch.has('q' + id) ? ' chg' : ''}"><span class="id">${id}</span>
+        <span class="kv"><span>setup_needed</span> ${G[g]} · <span>priority</span> ${p >= 20 ? `<b class="hot">${p} hot</b>` : p}</span>
+        <span class="kv"><span>free_since</span> ${fs} · <span>대기</span> ${wait(fs, f.t)}</span></div>`; }).join('') : '<div class="empty">비어 있음</div>';
+    $('cyc-machines').innerHTML = Object.entries(s.ms).map(([n, m]) => {
+      const c = key => ch.has(n + '.' + key) ? ' chg' : '';
+      const stTxt = m.st === 'idle' && m.mrl ? '비어 있음 (잠금)' : ST[m.st];
+      return `<div class="mc"><div class="mc-h"><b>${n}</b><span class="st ${m.st}${c('st')}">${stTxt}</span></div>
+        <div class="f${c('gas')}"><span class="k">current_setup</span><span class="v">${chip(m.gas)}</span></div>
+        <div class="f${c('mrl')}"><span class="k">min_runs_left</span><span class="v">${m.mrl ?? '—'}</span></div>
+        <div class="f${c('pcs')}"><span class="k">pieces_until_maint.</span><span class="v">${m.pcs.toLocaleString()}매</span></div>
+        <div class="f${c('lot')}"><span class="k">처리 lot · 끝</span><span class="v">${m.lot ? `${m.lot} · ${m.until}` : (m.st === 'pm' ? `PM · ${m.until}` : '—')}</span></div>
+        <div class="f${c('hold')}"><span class="k">hold_since</span><span class="v">${m.hold ?? '—'}</span></div></div>`; }).join('');
+    const rows = s.log.slice(-7);
+    $('cyc-log').innerHTML = rows.length ? rows.map(({ r, i }) => `<tr class="${i === k ? 'new' : ''}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${G[r[3]]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6] ? G[r[6]] : ''}</td><td>${r[7]}</td></tr>`).join('')
+      : '<tr><td colspan="8" class="empty">아직 행이 없습니다</td></tr>';
+    if (f.dec) {
+      const d = f.dec;
+      $('cyc-side-h').textContent = `결정 순간: ${d.who}의 g0 = ${G[d.g0]}`;
+      $('cyc-side').innerHTML = `<div class="dec"><div class="tbl"><table><thead><tr><th>가스</th><th class="num">대기 lot (D)</th><th class="num">건 장비 (C)</th></tr></thead><tbody>${
+        d.rows.map(r => `<tr><td>${chip(r[0])}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join('')}</tbody></table></div>
+        <div class="acts">${d.acts.map(a => `<span class="act ${a[1]}">${a[0]}</span>`).join('')}</div><div>${d.note}</div></div>`;
+    } else {
+      $('cyc-side-h').textContent = '보상 R1 누적 (09:00부터, 장비 수 8)';
+      const tot = s.area + s.setupMin;
+      $('cyc-side').innerHTML = `<div class="meter"><span>대기 lot × 흐른 시간</span><span class="v">${hm(s.area)}</span>
+        <span>교체 시간</span><span class="v">${hm(s.setupMin)}</span>
+        <span class="tot">R1 합 = −합 ÷ 8대</span><span class="v tot">−${(tot / 60 / 8).toFixed(2)}</span></div>
+        ${f.sum ? '<p class="meta">이 중 lot 103 몫은 대기 2시간 20분(09:00 이후)과 교체 1시간입니다.</p>' : ''}`;
+    }
+  }
+  let k = 0, timer = null;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const play = on => { clearInterval(timer); timer = on ? setInterval(() => { k = (k + 1) % S.length; render(k); }, 3200) : null; $('cyc-play').textContent = on ? '일시정지' : '재생 ▶'; };
+  $('cyc-prev').onclick = () => { play(false); k = (k - 1 + S.length) % S.length; render(k); };
+  $('cyc-next').onclick = () => { play(false); k = (k + 1) % S.length; render(k); };
+  $('cyc-play').onclick = () => play(!timer);
+  $('cyc-range').oninput = e => { play(false); k = +e.target.value; render(k); };
+  render(0); play(!reduce);
+})();
+</script>
+
+<section id="data">
+  <h2>두 환경에 있는 데이터와 변수</h2>
+  <p>"SMT2020 환경"은 공장 전체 시뮬레이터(PySCFabSim-revised)이고, "작은 환경"은 공장 실행에서 기록한 implant 도착을 다시 틀어 주는 재생 시뮬레이터입니다. 데이터는 원자료 → 공장 시뮬레이터 → 기록 파일 → 작은 환경 순서로 흘러갑니다.</p>
+
+  <div class="block">
+    <h3>원자료: SMT2020 사양 파일 (<code>data/raw/SMT2020_HVLM/*.txt</code>)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>파일</th><th>무엇을 정하나</th><th>주요 컬럼</th><th>implant에 해당하는 값</th></tr></thead>
+      <tbody>
+        <tr><td><code>tool.txt</code></td><td>장비군과 장비 수, 디스패칭 규칙</td><td><code>STNFAM</code> 장비군, <code>STNQTY</code> 대수, <code>RULE</code>, <code>SETUPGRP</code></td><td>106개 장비군, 1,443대(가상 지연 400대 포함, 실제 1,043대). implant 3개 장비군은 <code>rule_LSSU</code>, 셋업 그룹 <code>Implant_Gas</code></td></tr>
+        <tr><td><code>route_3.txt</code>, <code>route_4.txt</code></td><td>제품별 공정 순서</td><td><code>STEP</code>, <code>STNFAM</code>, <code>PTIME</code>/<code>PTPER</code> 처리 시간, <code>SETUP</code> 필요한 가스, <code>BATCHMN</code>/<code>MX</code>, <code>StepPercent</code> 표본 비율, <code>STEP_CQT</code></td><td>583 / 343공정. implant 처리는 lot당 15~27분. implant 공정에는 시간 제약(CQT)이 없음. implant 바로 앞에 표본 검사 공정이 많음</td></tr>
+        <tr><td><code>order.txt</code></td><td>무엇을 얼마나 자주 투입하나</td><td><code>PRIOR</code> 우선순위, <code>REPEAT</code> 투입 간격, <code>DUE</code> 납기</td><td>일반 lot 51.69분마다(우선순위 10), hot lot(20), super hot(30)</td></tr>
+        <tr><td><code>setup.txt</code>, <code>setupgrp.txt</code></td><td>가스 교체 시간, 최소 연속 처리</td><td><code>STIME</code>, <code>MINRUN</code></td><td>72 / 60 / 80분, 교체 뒤 최소 7 lot</td></tr>
+        <tr><td><code>pmcal.txt</code>, <code>attach.txt</code></td><td>예방 정비(PM)</td><td><code>MTBPM</code> 처리 매수 기준, <code>MTTR</code></td><td>128: 8,000 / 34,700 / 104,100매마다 13.3 / 26.6 / 53.2시간. PM이 끝나면 가스가 풀림</td></tr>
+        <tr><td><code>downcal.txt</code></td><td>고장</td><td><code>MTTF</code>, <code>MTTR</code> (지수분포)</td><td>평균 7일마다 고장, 평균 10.1시간 수리</td></tr>
+        <tr><td><code>WIP.txt</code></td><td>시작 시점 재공</td><td><code>CURSTEP</code>, <code>DUE</code></td><td>2,255 lot</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>공장 시뮬레이터 안의 변수 (실행 중 읽을 수 있는 것)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>객체</th><th>변수</th><th>의미</th><th>어디에 쓰나</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="5" class="grp">장비 <code>Machine</code></td><td><code>current_setup</code></td><td>지금 걸린 가스. 고장·PM 뒤에는 빈 값</td><td>상태 B, C</td></tr>
+        <tr><td><code>min_runs_left</code></td><td>최소 연속 처리 남은 lot 수(없으면 잠금 아님)</td><td>상태 C</td></tr>
+        <tr><td><code>pieces_until_maintenance</code></td><td>PM까지 남은 처리 매수</td><td>상태 B</td></tr>
+        <tr><td><code>waiting_lots</code></td><td>이 장비가 받을 수 있는 대기 lot</td><td>상태 D</td></tr>
+        <tr><td><code>events</code>, <code>free_machines</code></td><td>처리 끝나는 시각, 비어 있는지</td><td>상태 C, 점검용 추가 변수</td></tr>
+        <tr><td rowspan="4" class="grp">lot <code>Lot</code></td><td><code>actual_step.setup_needed</code></td><td>이번 공정에 필요한 가스</td><td>상태 D</td></tr>
+        <tr><td><code>priority</code>, <code>free_since</code></td><td>hot 여부, 대기 시작 시각</td><td>상태 D</td></tr>
+        <tr><td><code>remaining_steps</code></td><td>남은 공정 목록. 앞 공정에서 곧 올 lot을 셀 수 있음</td><td>상태 F (앞 공정 lot 수)</td></tr>
+        <tr><td><code>deadline_at</code>, <code>remaining_time</code></td><td>납기, 남은 처리 시간</td><td>확장 (납기 보상)</td></tr>
+        <tr><td class="grp">통계</td><td><code>lot_waiting_at_machine</code>, <code>done_at − release_at</code>, tardiness</td><td>장비군별 대기, 사이클타임(CT), 납기 지연</td><td>공장 평가</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>기록 파일 (공장 → 작은 환경)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>파일</th><th>컬럼</th><th>의미</th></tr></thead>
+      <tbody>
+        <tr><td><code>events_v2.csv</code></td><td><code>t, kind, family, lot, setup, part, priority, machine, machine_setup_before, n, step, machine_time</code></td><td>implant 도착(<code>arrive</code>)과 투입(<code>start</code>). 작은 환경의 도착 기록. lssu, 240일, 시드 1~3</td></tr>
+        <tr><td><code>prev_times.csv</code></td><td><code>lot, step, t, enter_prev1, enter_prev2</code></td><td>각 implant 도착 lot이 route상 바로 앞 1·2번째 공정에 들어온 시각. 작은 환경에서 앞 공정 lot 수를 계산 (오늘 추가)</td></tr>
+        <tr><td><code>state_log.csv</code></td><td>시각, 장비, 가스 순서 + 상태 23개 + 점검용 9개</td><td>공장에서 결정 순간마다 기록한 상태(cov, 30% 표본). 두 환경 비교용 (오늘 추가)</td></tr>
+        <tr><td><code>implant_info.json</code></td><td>장비군별 대기, 교체·PM·고장 시간</td><td>규칙별 공장 결과 요약</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>작은 환경의 변수 (<code>src/implant_env.py</code>)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>변수</th><th>의미</th><th>공장에서 대응하는 것</th></tr></thead>
+      <tbody>
+        <tr><td><code>arr</code></td><td>재생할 도착 목록 (시각, 가스, hot, 처리 시간, 재방문 연결, 앞 공정 진입까지 시간)</td><td><code>events_v2.csv</code> + <code>prev_times.csv</code></td></tr>
+        <tr><td><code>q[g]</code>, <code>qh[g]</code></td><td>가스별 일반 / hot 대기열</td><td><code>waiting_lots</code></td></tr>
+        <tr><td><code>M.gas</code>, <code>M.left</code>, <code>M.lock</code></td><td>장비의 가스, 최소 연속 처리 남은 수와 대상 가스</td><td><code>current_setup</code>, <code>min_runs_left</code></td></tr>
+        <tr><td><code>M.pieces</code>, <code>M.free</code>, <code>M.hold_since</code></td><td>PM까지 매수, 비었는지, 기다리기 시작한 시각</td><td><code>pieces_until_maintenance</code>, <code>free_machines</code>, cov 훅의 대기 시각</td></tr>
+        <tr><td><code>ev</code></td><td>사건 대기열 (처리 끝, 깨우기, 고장, 재방문 도착)</td><td>시뮬레이터 사건 큐</td></tr>
+        <tr><td><code>up_cnt</code></td><td>가스별 앞 1·2공정 lot 수 (오늘 추가)</td><td><code>remaining_steps</code>로 센 값</td></tr>
+        <tr><td><code>area</code>, <code>rec</code></td><td>누적 (대기 lot × 시간 + 교체 시간), lot별 대기 기록</td><td><code>lot_waiting_at_machine</code>, <code>setuped_time</code></td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">공장 2년 실행은 약 1.5시간, 작은 환경의 240일 재생은 장비군 하나에 1~2초 걸립니다. RL 학습은 작은 환경에서 합니다.</p>
+  </div>
+
+  <div class="block" id="volume">
+    <h3>기간과 데이터 양</h3>
+    <p>공장 실행은 세 종류입니다. <b>기록용 240일 실행</b>은 작은 환경에 넣을 도착을 뽑는 데 쓰고, <b>탐색용 2년 실행</b>은 규칙을 공장 전체에 넣어 본 EDA 단계 실행이며, <b>최종 검증용 2년 실행</b>은 학습이 끝난 정책을 처음 보는 시드로 공장에서 재는 실행입니다. 모두 HVLM, 디스패칭 FIFO, 확산 배치 규칙 Demand, 시뮬레이터 PySCFabSim-revised(ae3d55e)입니다.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>실행</th><th>implant 규칙</th><th class="num">기간</th><th class="num">시드</th><th>통계에 쓰는 구간</th><th>용도</th></tr></thead>
+      <tbody>
+        <tr><td>기록용</td><td>lssu (기본)</td><td class="num">240일</td><td class="num">1, 2, 3</td><td>60일 이후 180일</td><td>작은 환경의 도착 기록 (<code>events_v2.csv</code>, <code>prev_times.csv</code>)</td></tr>
+        <tr><td>상태 점검용</td><td>cov</td><td class="num">240일</td><td class="num">1</td><td>60일 이후</td><td>결정 순간 상태 기록 (<code>state_log.csv</code>, 30% 표본)</td></tr>
+        <tr><td>탐색용</td><td>lssu, cov(이전 튜닝값), hold15, hold30, longest</td><td class="num">730일</td><td class="num">1, 2, 3</td><td>1년 뒤 통계 초기화, 2년 차</td><td>규칙 탐색, 재현 지표 ②. 시드 1은 학습 기록과 겹침(아래)</td></tr>
+        <tr><td>최종 검증용</td><td>lssu, cov(고친 환경 튜닝값), PPO, DQN</td><td class="num">730일</td><td class="num">4, 5, 6</td><td>1년 뒤 통계 초기화, 2년 차</td><td>정책의 공장 CT·납기·implant 대기. 학습·튜닝·시험 어디에도 안 쓴 시드</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="tbl"><table>
+      <thead><tr><th>기록용 240일 실행 (시드 1)</th><th class="num">Implant_128</th><th class="num">Implant_132</th><th class="num">Implant_91</th></tr></thead>
+      <tbody>
+        <tr><td>implant 도착 (<code>arrive</code> 행), 240일 전체</td><td class="num">109,565</td><td class="num">75,472</td><td class="num">54,799</td></tr>
+        <tr><td>그중 60일 이후 (평가 구간)</td><td class="num">81,980</td><td class="num">56,557</td><td class="num">41,096</td></tr>
+        <tr><td>서로 다른 lot 수</td><td class="num">15,144</td><td class="num">14,135</td><td class="num">14,332</td></tr>
+        <tr><td>lot 하나가 이 장비군에 오는 횟수 (평균)</td><td class="num">7.2</td><td class="num">5.3</td><td class="num">3.8</td></tr>
+        <tr><td>hot lot 비율 (우선순위 20 이상)</td><td class="num">2.5%</td><td class="num">2.5%</td><td class="num">2.5%</td></tr>
+        <tr><td>가스 3종 비율</td><td class="num">37.5 / 37.5 / 25%</td><td class="num">45 / 27 / 27%</td><td class="num">37.5 / 37.5 / 25%</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>파일 크기:</b> 시드마다 <code>events_v2.csv</code> 약 48만 행(도착 약 24만 + 투입 약 24만, 40MB), <code>prev_times.csv</code> 약 24만 행(14MB). 시드 2·3도 장비군별 도착 수가 시드 1과 0.3% 안으로 같습니다.</li>
+      <li><b>앞 공정 시각이 채워진 비율:</b> 앞 1공정 78.5%, 앞 1·2공정 85.8%. 나머지는 240일 시작 전에 이미 앞 공정을 지난 lot(초기 재공)이거나 route상 앞 공정이 없는 경우입니다.</li>
+      <li><b>학습 / 시험 나누기:</b> 학습은 기록 시드 1에서 60~220일 사이 14일 구간을 무작위로 뽑습니다(구간 앞은 cov로 돌려 상태를 만듦). 시험은 학습에 안 쓴 기록 시드 2·3의 60~240일 전체를 고장 시드 1·2로 각각 돌립니다. 장비군마다 4번입니다.</li>
+    </ul>
+    <div class="callout"><b>데이터 나누기 (2026-11-13 정리)</b><span>같은 시드로 공장을 돌리면 lot 투입과 고장 난수가 같아서, 2년 실행의 앞 240일은 같은 시드의 240일 기록과 같은 흐름입니다(규칙이 같으면 기록이 바이트 단위로 같음). 그래서 시드마다 한 가지 용도만 줍니다.</span></div>
+    <div class="tbl"><table>
+      <thead><tr><th>시드</th><th>용도</th><th>무엇을 고르는 데 쓰나</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>cov 튜닝, RL 학습, RL 검증(고정 14일 구간 9개, 고장 시드 9000번대)</td><td>규칙 파라미터, 학습 중 가장 좋은 시점의 모델, 공장에 넣을 정책 1개</td></tr>
+        <tr><td class="num">2, 3</td><td>작은 환경 시험</td><td>아무것도 고르지 않음 (보고만)</td></tr>
+        <tr><td class="num">4, 5, 6</td><td>공장 최종 검증 (2년)</td><td>아무것도 고르지 않음 (보고만)</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>이전 공장 검증의 한계:</b> EDA 단계의 2년 실행(시드 1~3)에서 시드 1의 60~240일은 cov 튜닝과 RL 학습에 쓴 기록과 같은 흐름입니다. 전체 평가 기간의 약 8%(180일 ÷ 2,190일)라 작지만, "처음 보는 데이터로 검증"이 아니므로 최종 결과는 시드 4~6으로 다시 잽니다.</li>
+      <li><b>cov 파라미터 불일치:</b> 탐색용 2년 실행의 cov는 재방문 연결을 고치기 전 튜닝값(128: Q 5·240분, 132: 3·240분, 91: 5·480분)이었습니다. 작은 환경과 RL 비교 기준은 고친 뒤 튜닝값(128: 5·120분, 132: 3·240분, 91: 7·240분)입니다. 최종 검증은 고친 뒤 값으로 통일합니다(<code>run_implant_setup.py --cov_fb</code>).</li>
+      <li><b>공장에 넣을 정책 고르기:</b> 알고리즘마다 학습 10개(시드 0~4 × 앞 공정 정보 유무) 중 시드 1 검증 점수가 가장 낮은 것 하나. 시드 2·3 시험 결과로는 고르지 않습니다(<code>experiments/pick_policy.py</code>).</li>
+    </ul>
+
+    <h3>왜 이렇게 만들었나</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>선택</th><th>이유</th><th>대안과 버린 이유</th></tr></thead>
+      <tbody>
+        <tr><td>도착을 분포로 뽑지 않고 공장 기록을 그대로 재생</td><td>implant 도착은 몰려서 옵니다(8시간 단위 분산/평균 1.6~3.5). 포아송으로 뽑으면 "기다리면 곧 온다"는 핵심 상황이 사라집니다</td><td>포아송 / 베르누이 도착: 만들기 쉽지만 결정의 이득을 과소평가하거나 엉뚱하게 평가함</td></tr>
+        <tr><td>장비군 안의 규칙은 공장 코드를 그대로 옮김</td><td>교체 시간, 최소 7 lot, PM, 고장이 정책 결과를 직접 바꾸므로 공장과 달라지면 옮겼을 때 효과가 달라짐</td><td>단순화(PM·고장 생략): 결정 순간이 달라짐. 재현 지표 ①에서 확인</td></tr>
+        <tr><td>왕복 12시간 이하 재방문만 처리 시각에 연결</td><td>132는 lot의 58%가 24시간 안에 돌아옴. 연결하지 않으면 대기가 13~26% 길게 나옴</td><td>전부 연결: 다른 장비군을 거친 시간까지 바뀌어 근거가 약함</td></tr>
+        <tr><td>240일 기록, 60일 버림</td><td>implant 도착량은 처음부터 10일당 약 1만 건으로 일정합니다. 60일은 장비 가스·대기열이 초기값(가스 없음, 초기 재공)에서 벗어나도록 둔 여유입니다. 버린 뒤에도 180일, 장비군당 4~8만 도착이 남습니다</td><td>60일이 꼭 필요한지는 따로 재지 않았습니다</td></tr>
+        <tr><td>공장 검증은 2년, 1년 차 통계 버림</td><td>공장 CT는 lot이 여러 번 순환한 뒤에야 안정됩니다. Kopp/Mönch 기준값 비교도 같은 방식입니다</td><td>240일 검증: CT 통계가 초기 재공에 끌림</td></tr>
+        <tr><td>HVLM</td><td>제품 2종을 대량으로 만드는 메모리 공장에 가깝고, 2년 실행이 약 1.5시간이라 시드 여러 개가 가능</td><td>LVHM은 일반화 확인용으로 남김</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="env">
+  <h2><span class="no">1</span>환경 통일: 어떻게 보정했고 얼마나 재현하나</h2>
+  <div class="block">
+    <h3>작은 환경을 만든 방법</h3>
+    <ul>
+      <li><b>도착은 공장 기록을 그대로 씁니다.</b> 공장(기본 규칙, 240일, 시드 1~3)에서 implant에 lot이 도착한 시각, 가스, hot 여부, 처리 시간을 기록해 재생합니다.</li>
+      <li><b>장비군 안의 규칙은 공장 코드를 옮겼습니다.</b> 교체 시간, 최소 7 lot 연속 처리, 처리 매수 기반 PM(가스가 풀림), 지수분포 고장(처리 중이면 끝나는 시각을 미룸)이 같습니다.</li>
+      <li><b>보정 1회 (EDA 06):</b> 처음에는 Implant_132의 대기가 실제보다 13~26% 길었습니다. 132는 lot의 58%가 24시간 안에 같은 장비군으로 돌아오는데, 도착이 고정이라 "빨리 처리하면 빨리 돌아온다"는 되먹임이 빠졌기 때문입니다. 왕복 12시간 이하 재방문은 이번 처리 시각에 맞춰 도착하도록 고쳤습니다. 12시간은 시드 1로 골랐습니다.</li>
+      <li><b>남은 한계:</b> 왕복 12시간이 넘거나 다른 implant 장비군을 거쳐 돌아오는 lot은 고정 도착입니다.</li>
+    </ul>
+  </div>
+
+  <div class="block">
+    <h3>재현 지표 ① 기본 규칙을 그대로 재현하나</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>장비군</th><th class="num">대기 차이 (재생 − 공장), 시드 1 / 2 / 3</th><th class="num">교체 시간 비율 차이</th><th>기준 ±15%</th></tr></thead>
+      <tbody>
+        <tr><td>Implant_128</td><td class="num">0% / +2% / −5%</td><td class="num">±2% 안</td><td><span class="pill ok">통과</span></td></tr>
+        <tr><td>Implant_132</td><td class="num">+8% / +5% / +14%</td><td class="num">±2% 안</td><td><span class="pill mid">통과, 기준에 가까움</span></td></tr>
+        <tr><td>Implant_91</td><td class="num">−2% / −7% / −5%</td><td class="num">±2% 안</td><td><span class="pill ok">통과</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>재현 지표 ② 규칙을 바꿨을 때 공장과 같은 만큼 움직이나</h3>
+    <p>같은 규칙을 공장(2년, 시드 1~3)과 작은 환경에 각각 넣고, 기본 규칙 대비 implant 대기 변화를 비교했습니다. RL 정책을 공장에 옮길 때 가장 직접적인 근거입니다.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>장비군</th><th>규칙</th><th class="num">공장 대기</th><th class="num">재생 대기</th><th class="num">기본 대비 공장</th><th class="num">기본 대비 재생</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="3" class="grp">Implant_128</td><td>15분 대기</td><td class="num">1.89h</td><td class="num">1.87h</td><td class="num">−8%</td><td class="num">−10%</td></tr>
+        <tr><td>30분 대기</td><td class="num">1.54h</td><td class="num">1.58h</td><td class="num">−26%</td><td class="num">−24%</td></tr>
+        <tr><td>cov</td><td class="num">1.05h</td><td class="num">1.05h</td><td class="num">−49%</td><td class="num">−49%</td></tr>
+        <tr><td rowspan="3" class="grp">Implant_132</td><td>15분 대기</td><td class="num">1.94h</td><td class="num">2.10h</td><td class="num">−6%</td><td class="num">−5%</td></tr>
+        <tr><td>30분 대기</td><td class="num">1.86h</td><td class="num">2.03h</td><td class="num">−10%</td><td class="num">−8%</td></tr>
+        <tr><td>cov</td><td class="num">1.17h</td><td class="num">1.25h</td><td class="num">−43%</td><td class="num">−44%</td></tr>
+        <tr><td rowspan="3" class="grp">Implant_91</td><td>15분 대기</td><td class="num">3.51h</td><td class="num">3.41h</td><td class="num">−4%</td><td class="num">−5%</td></tr>
+        <tr><td>30분 대기</td><td class="num">3.38h</td><td class="num">3.27h</td><td class="num">−8%</td><td class="num">−9%</td></tr>
+        <tr><td>cov</td><td class="num">2.00h</td><td class="num">2.01h</td><td class="num">−46%</td><td class="num">−44%</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout good"><b>9개 조합 모두 규칙 순위가 같고, 변화 크기 차이는 2%p 이하입니다.</b><span>이 비교는 implant 대기까지입니다. 공장 CT가 같은 비율로 줄어든다는 뜻은 아닙니다. RL 정책도 같은 비교를 한 번 더 해야 합니다.</span></div>
+  </div>
+
+  <div class="block">
+    <h3>재현 지표 ③ 결정 순간의 상태 분포가 같은가</h3>
+    <p>같은 cov 규칙으로 두 환경을 돌리고, 결정 순간마다 같은 함수로 상태를 계산해 분포를 비교했습니다. KS 거리는 0이면 같은 분포, 1이면 완전히 다른 분포입니다.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>비교</th><th class="num">Implant_128</th><th class="num">Implant_132</th><th class="num">Implant_91</th></tr></thead>
+      <tbody>
+        <tr><td>상태 20개 (고정값 제외) 최대 KS</td><td class="num">0.07</td><td class="num">0.08</td><td class="num">0.06</td></tr>
+        <tr><td>앞 공정 lot 수 6개 최대 KS</td><td class="num">0.05</td><td class="num">0.06</td><td class="num">0.04</td></tr>
+        <tr><td>기다리면 교체 시간 안에 현재 가스 lot이 오는 비율 (재생 / 공장)</td><td class="num">99.4 / 99.8%</td><td class="num">98.5 / 98.6%</td><td class="num">87.0 / 87.3%</td></tr>
+        <tr><td>결정 횟수, 240일 30% 표본 (재생 / 공장)</td><td class="num">5,239 / 5,367</td><td class="num">2,877 / 3,296</td><td class="num">1,581 / 1,778</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">가장 큰 차이는 "g1 가스로 놀고 있는 장비 비율"입니다(재생 0, 공장 1~2%). 공장은 같은 시각의 장비를 하나씩 처리하므로, 다른 장비가 g1 lot을 집기 직전에 이 장비의 결정이 먼저 일어나는 경우가 있습니다.</p>
+  </div>
+
+  <div class="block">
+    <h3>재현성 확인</h3>
+    <ul>
+      <li>같은 규칙과 시드로 공장을 다시 돌리면 도착 기록이 바이트 단위까지 같습니다(체크섬 일치, 시드 1~3).</li>
+      <li>작은 환경에 앞 공정 계산을 넣은 뒤에도 기존 규칙 결과가 소수점 여섯째 자리까지 같습니다.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="state">
+  <h2><span class="no">2</span>상태(s) 통일</h2>
+  <p>두 환경은 각자 자기 변수를 읽어 넘기기만 하고, 상태 값은 <code>src/implant_state.py</code> 한 곳에서 계산합니다. 그래서 같은 이름의 변수는 두 환경에서 같은 계산으로 나옵니다. 상태는 장비군 크기와 무관하게 만들었습니다(장비 수로 나누고, 시간은 교체 시간으로 나눔).</p>
+  <p>가스는 번호 대신 상대 위치로 부릅니다. <b>g0</b> = 이 장비에 지금 걸린 가스, <b>g1·g2</b> = 나머지 둘(대기 lot이 많은 순). 고장·PM 직후라 가스가 없는 장비는 어차피 교체해야 하므로 RL이 결정하지 않고 cov가 가스를 고릅니다.</p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>덩어리</th><th>변수</th><th>의미</th><th>정규화</th><th class="num">개수</th><th>공장에서</th><th>작은 환경에서</th></tr></thead>
+    <tbody>
+      <tr><td class="grp">A 장비군</td><td>장비 수, 교체 시간</td><td>어떤 장비군인가</td><td>÷10, 시간 단위</td><td class="num">2</td><td><code>STNQTY</code>, <code>STIME</code></td><td><code>FAMILIES</code></td></tr>
+      <tr><td class="grp" rowspan="2">B 이 장비</td><td>이미 기다린 시간</td><td>기다릴수록 바꿀 이유가 커짐</td><td>÷ 교체 시간</td><td class="num">1</td><td>cov 훅의 대기 시각</td><td><code>hold_since</code></td></tr>
+      <tr><td>PM까지 남은 lot 수</td><td>곧 PM이면 어차피 가스가 풀림</td><td>÷7, 3에서 자름</td><td class="num">1</td><td><code>pieces_until_maintenance</code></td><td><code>M.pieces</code></td></tr>
+      <tr><td class="grp" rowspan="2">C 나머지 장비</td><td>g0·g1·g2별: 잠금 처리 중 / 처리 중 / 놀고 있음</td><td>각 가스를 누가 얼마나 맡고 있나</td><td>장비 수 대비 비율</td><td class="num">9</td><td><code>current_setup</code>, <code>min_runs_left</code>, <code>free_machines</code></td><td><code>M.gas</code>, <code>M.left</code>, <code>M.free</code></td></tr>
+      <tr><td>가스 없음 (고장·PM 중)</td><td>쓸 수 없는 장비</td><td>비율</td><td class="num">1</td><td>빈 <code>current_setup</code></td><td><code>M.gas = −1</code></td></tr>
+      <tr><td class="grp" rowspan="3">D 대기열</td><td>g1·g2별 일반 lot 수</td><td>밀린 일의 양</td><td>÷ 장비 수, log(1+x)</td><td class="num">2</td><td rowspan="3"><code>waiting_lots</code>, <code>priority</code>, <code>free_since</code></td><td rowspan="3"><code>q[g]</code>, <code>qh[g]</code></td></tr>
+      <tr><td>g1·g2별 hot lot 수</td><td>급한 일</td><td>그대로</td><td class="num">2</td></tr>
+      <tr><td>g1·g2별 가장 오래 기다린 시간</td><td>오래 묵은 일</td><td>÷ 교체 시간, log(1+x)</td><td class="num">2</td></tr>
+      <tr><td class="grp">E 최근 도착</td><td>g0·g1·g2별 지난 1시간 도착 수</td><td>도착 속도</td><td>÷ 장비 수</td><td class="num">3</td><td>도착 훅의 카운터</td><td>도착 기록</td></tr>
+      <tr><td class="grp">F 앞 공정</td><td>g0·g1·g2별 앞 1공정 / 앞 1·2공정 lot 수</td><td>곧 올 일</td><td>÷ 장비 수</td><td class="num">6</td><td><code>remaining_steps</code></td><td><code>prev_times.csv</code> → <code>up_cnt</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="meta">합계 29개. C의 10칸은 결정하는 장비를 뺀 모든 장비가 정확히 한 칸에 들어가 합이 1입니다. 셋업 중인 장비는 교체 직후 항상 잠금 상태이므로 "잠금 처리 중"에 들어갑니다.</p>
+
+  <div class="two">
+    <div>
+      <h3>뺀 것: 다른 변수로 정확히 계산되는 값</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>뺀 것</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td>g0 대기열</td><td>결정은 현재 가스 lot이 없을 때만 생기므로 항상 0</td></tr>
+          <tr><td>cov 점수</td><td>D의 lot 수와 C의 장비 비율로 계산됨</td></tr>
+          <tr><td>전체 대기, 가스별 장비 합</td><td>D, C 칸의 합</td></tr>
+          <tr><td>lot 처리 시간</td><td>15~27분으로 가스 안 변동이 작고(변동계수 0.01~0.23), 최소 연속 처리도 lot 단위</td></tr>
+          <tr><td>하루 중 시각</td><td>투입 간격이 51.69분으로 고정이라 시간대 패턴이 없음</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div>
+      <h3>상관이 높은 변수는 빼지 않습니다</h3>
+      <p>회귀에서는 다중공선성 때문에 계수를 해석할 수 없게 되지만, RL 상태에서는 다른 행동이 필요한 상황을 구분하는 것이 더 중요합니다. 예를 들어 "쌓인 12 lot이 방금 몰려왔다"와 "12 lot이 몇 시간째 쌓여 있고 더 안 온다"는 대기 lot 수가 같아도 다른 상황입니다. 앞쪽은 기다리면 더 올 수 있고, 뒤쪽은 지금 바꾸는 편이 낫습니다.</p>
+      <p>필요한지는 덩어리를 하나씩 빼고 학습해 보는 비교로 확인합니다.</p>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>빠진 정보 점검: 앞 공정 lot 수가 핵심이었습니다</h3>
+    <p>결정 순간마다 "몇 분 안에 현재 가스 lot이 오나(기다리면 교체를 피하나)"를 얼마나 맞히는지 AUC로 쟀습니다. 0.5는 동전 던지기, 1은 완벽입니다. 공장 기록 240일의 앞 70% 기간으로 학습하고 뒤 30%로 시험했습니다.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>몇 분 안에</th><th class="num">실제로 오는 비율</th><th class="num">상태 A~E</th><th class="num">+ 처리 끝나는 시각</th><th class="num">+ 앞 공정 lot 수</th></tr></thead>
+      <tbody>
+        <tr><td>10분</td><td class="num">56%</td><td class="num">0.61</td><td class="num">0.61</td><td class="num"><b>0.67</b></td></tr>
+        <tr><td>20분</td><td class="num">79%</td><td class="num">0.67</td><td class="num">0.66</td><td class="num"><b>0.77</b></td></tr>
+        <tr><td>30분</td><td class="num">88%</td><td class="num">0.73</td><td class="num">0.72</td><td class="num"><b>0.87</b></td></tr>
+      </tbody>
+    </table></div>
+    <p>앞 공정 정보가 없으면 "곧 올 상황"과 "안 올 상황"이 같은 상태로 보입니다. 실제 공장에서도 MES가 앞 공정 재공을 알고 있으므로 상태 F로 넣었습니다. 작은 환경에서도 같은 효과가 나옵니다(30분 기준 AUC 0.56~0.59 → 0.75~0.82). 처리 끝나는 시각은 이 질문에는 도움이 안 됐습니다.</p>
+  </div>
+</section>
+
+<section id="ar">
+  <h2><span class="no">3</span>행동(a)·보상(r) 후보</h2>
+  <div class="block">
+    <h3>행동</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>후보</th><th>행동</th><th class="num">개수</th><th>작은 환경 / 공장 구현</th><th>장점</th><th>위험</th><th>판단</th></tr></thead>
+      <tbody>
+        <tr><td>A1</td><td>{다음 사건까지 기다리기, g1로 교체, g2로 교체}</td><td class="num">3</td><td>정책이 (가스, 깨울 시각)을 반환 / cov 훅과 같은 자리</td><td>지금 인터페이스 그대로. 대기 lot 없는 가스는 마스킹</td><td>기다림 길이를 직접 고르지 못함(대신 사건마다 다시 물음)</td><td><span class="pill ok">주 실험</span></td></tr>
+        <tr><td>A2</td><td>{g로 교체} ∪ {15/30/60/120분 기다리기}</td><td class="num">6</td><td>깨울 시각 = 지금 + Δ</td><td>기다림 길이를 학습</td><td>행동이 늘어남</td><td><span class="pill mid">변형</span></td></tr>
+        <tr><td>A3</td><td>cov 기준값 (Q, Tmax)을 몇 시간마다 고름</td><td class="num">약 20</td><td>규칙 함수 교체 / <code>COV</code> 교체</td><td>안전, 해석 쉬움</td><td>규칙의 한계를 못 넘음</td><td><span class="pill mid">비교군 (MAB)</span></td></tr>
+        <tr><td>A4</td><td>장비별 담당 가스 배정</td><td class="num">많음</td><td>미구현</td><td></td><td>고정 배정은 CT +9%, 납기 76→18%로 크게 나빴음</td><td><span class="pill no">제외</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="block">
+    <h3>보상</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>후보</th><th>보상 (두 결정 사이 구간마다)</th><th>데이터 출처</th><th>위험</th><th>판단</th></tr></thead>
+      <tbody>
+        <tr><td>R1</td><td>−(대기 lot 수 × 흐른 시간 + 이번 교체 시간) ÷ 장비 수</td><td>작은 환경 <code>area</code> / 공장 <code>waiting_time</code>, <code>setuped_time</code></td><td>hot을 따로 보지 않음</td><td><span class="pill ok">주 보상</span></td></tr>
+        <tr><td>R2</td><td>R1 + hot lot 대기에 가중치</td><td><code>priority</code>, order <code>PRIOR</code></td><td>가중치를 정해야 함</td><td><span class="pill mid">변형</span></td></tr>
+        <tr><td>R3</td><td>−교체 시간만</td><td>setup <code>STIME</code></td><td>이것만 쓰면 아예 안 바꾸는 쪽으로 쏠림</td><td><span class="pill no">보조</span></td></tr>
+        <tr><td>R4</td><td>−(4시간 넘은 대기)</td><td>대기 시작 시각</td><td>평균과 맞교환</td><td><span class="pill mid">변형</span></td></tr>
+        <tr><td>R5</td><td>−납기 여유가 줄어든 양</td><td>order <code>DUE</code>, <code>deadline_at</code> (기록 추가 필요)</td><td>납기 준수는 CT 1일에 16~17%p 흔들리는 잡음 큰 지표</td><td><span class="pill no">확장</span></td></tr>
+        <tr><td>평가</td><td>공장 평균 CT, 납기 준수, 처리량, implant 대기</td><td>공장 통계</td><td>시드 잡음 큼 (CT 표준편차 0.45일)</td><td><span class="pill no">보상 아님</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">R1을 구간별로 더하면 지금까지 판정에 쓴 주 지표 D(lot당 대기 + 그 lot이 일으킨 교체 시간)와 같습니다.</p>
+  </div>
+</section>
+
+<section id="method">
+  <h2><span class="no">4</span>방법론 후보</h2>
+  <div class="callout warn"><b>과제 안내문 조건: 알고리즘은 직접 구현합니다.</b><span>"Python으로 강화학습 알고리즘을 구현", "코드는 직접 구현하여 표절이 되지 않도록". 배점은 알고리즘 구현·실험 설계 30점입니다. 그래서 SB3 같은 라이브러리는 주 결과에 쓰지 않고, 우리 구현이 맞는지 확인하는 참고용으로만 씁니다. 여러 알고리즘·하이퍼파라미터 비교와 시드를 바꾼 신뢰구간도 요구 사항입니다.</span></div>
+  <div class="tbl"><table>
+    <thead><tr><th>수업</th><th>방법</th><th>이 문제에 맞나</th><th>역할</th></tr></thead>
+    <tbody>
+      <tr><td>1장 MDP</td><td>episodic / continuing, 할인</td><td>공장은 끝이 없는 continuing task입니다. 14일 구간 끝은 우리가 자른 것이라 truncated로 두고 가치로 이어 붙입니다</td><td>문제 정의</td></tr>
+      <tr><td>2장 DP</td><td>가치 반복, 정책 반복</td><td>상태가 연속이고 크며 전이 확률을 모릅니다</td><td><span class="pill no">안 씀</span></td></tr>
+      <tr><td>4장 TD</td><td>SARSA, Q-learning (표)</td><td>상태 몇 개를 구간으로 나누면 가능하지만 정보를 많이 버립니다</td><td><span class="pill no">선택</span></td></tr>
+      <tr><td>5장 MAB</td><td>UCB, Thompson</td><td>cov 기준값 조합을 팔로 두면 행동 A3와 같습니다</td><td><span class="pill mid">규칙 튜닝 비교군</span></td></tr>
+      <tr><td>6장 DQN</td><td>DQN, Double, Dueling</td><td>행동이 3개라 잘 맞습니다. 리플레이로 데이터를 재사용합니다</td><td><span class="pill ok">주 비교</span></td></tr>
+      <tr><td>7장 PG</td><td>REINFORCE + baseline</td><td>14일 구간에 결정이 수백~수천 번이라 분산이 큽니다</td><td><span class="pill no">대조용</span></td></tr>
+      <tr><td>8장 AC</td><td>A2C, 병렬 환경</td><td>시뮬레이션이 싸고 병렬이 쉽습니다. 8장 "Which method": 시뮬레이션이 싸면 on-policy가 간단하고 안정적</td><td><span class="pill no">선택</span></td></tr>
+      <tr><td>9장 PPO</td><td>clipped surrogate + GAE</td><td>이산 행동 + 마스킹, 싸고 병렬인 시뮬레이션</td><td><span class="pill ok">주 방법</span></td></tr>
+      <tr><td>9주 Model-based</td><td>모델로 계획</td><td>작은 환경 자체가 모델입니다. 미래를 모르는 rollout 계획(EDA 06)이 cov보다 지연 10~14% 짧았습니다</td><td><span class="pill mid">강한 비교군</span></td></tr>
+      <tr><td>10주 Imitation</td><td>BC, DAgger</td><td>rollout 계획은 강하지만 느립니다(240일에 3~16분). 신경망이 계획을 흉내 내면 빠른 정책이 됩니다</td><td><span class="pill mid">확장</span></td></tr>
+      <tr><td>11주 Offline RL</td><td>기록으로 학습</td><td>공장 실행 기록(lssu, cov)이 있습니다</td><td><span class="pill no">확장</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="block">
+    <h3>이 문제에 맞게 바꾼 점</h3>
+    <ul>
+      <li><b>행동 마스킹:</b> 대기 lot이 없는 가스로는 바꿀 수 없으므로, 막힌 행동의 logit을 매우 작게 둡니다.</li>
+      <li><b>시간 기준 할인:</b> 결정 간격이 몇 초에서 몇 시간까지 들쭉날쭉합니다. 한 step의 할인을 γ<sub>h</sub><sup>흐른 시간</sup>으로 둡니다. γ<sub>h</sub> = 0.9/시간이면 약 10시간 앞까지 봅니다.</li>
+      <li><b>공유 정책:</b> 에피소드마다 장비군을 무작위로 고릅니다.</li>
+    </ul>
+  </div>
+  <div class="block">
+    <h3>실험 설계</h3>
+    <ul>
+      <li>알고리즘 비교: PPO vs DQN 계열 vs 규칙(lssu, cov) vs rollout 계획</li>
+      <li>정보 비교: 앞 공정 정보 있음/없음, 상태 덩어리 하나씩 빼기</li>
+      <li>하이퍼파라미터: γ<sub>h</sub>, clip ε, GAE λ, 구간 길이</li>
+      <li>시드: 학습 시드 3~5개. 시험은 학습에 안 쓴 도착 기록(시드 2, 3)과 고장 시드로 하고, 주 단위 짝 차이로 신뢰구간을 냅니다</li>
+      <li>일반화: 장비군 하나 빼고 학습, 장비 ±1~2대, LVHM</li>
+      <li>공장 검증: 학습한 정책을 SMT2020 공장 전체에 넣어 CT, 납기, implant 대기를 lssu·cov와 비교</li>
+    </ul>
+  </div>
+</section>
+
+<section id="run">
+  <h2><span class="no">5</span>간단히 돌려 보기: 직접 구현한 PPO와 DQN</h2>
+
+  <div class="callout good"><b>2026-11-13 최신: 직접 구현한 DQN이 처음으로 cov를 넘었습니다. 다만 폭이 작고 장비군마다 엇갈립니다.</b><span>DQN 10개(시드 0~4 × 앞 공정 정보 유무) 평균, 작은 환경 시험의 lot당 지연이 cov 대비 128 −6.9%, 132 −2.0%, 91 +2.6%, 전체 lot 기준 −2.2%입니다. 전체 기준 10개 중 8개 개선, hot lot 지연은 10개 모두 짧아졌습니다. PPO는 10개 모두 cov보다 7~44% 깁니다. 아래 표와 "왜 처음엔 안 됐나"가 이번 판의 핵심이고, 그 아래는 이전 기록입니다.</span></div>
+
+  <div class="block">
+    <h3>최종 비교 (v4, 작은 환경 시험: 기록 시드 2·3 × 고장 시드 1·2, 240일)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>정책</th><th class="num">Implant_128</th><th class="num">Implant_132</th><th class="num">Implant_91</th><th class="num">hot lot 지연 (128 / 132 / 91)</th><th class="num">교체 시간 비율</th></tr></thead>
+      <tbody>
+        <tr><td>기본 규칙 lssu</td><td class="num">2.19</td><td class="num">2.31</td><td class="num">3.62</td><td class="num">0.49 / 0.59 / 1.14</td><td class="num">15.1 / 11.0 / 14.5%</td></tr>
+        <tr><td>cov (튜닝 규칙)</td><td class="num">1.08</td><td class="num">1.33</td><td class="num">2.05</td><td class="num">0.53 / 0.51 / 0.81</td><td class="num">6.4 / 5.8 / 6.7%</td></tr>
+        <tr><td><b>DQN 10개 평균</b> (범위)</td><td class="num"><b>1.01</b> (0.92~1.11)</td><td class="num"><b>1.30</b> (1.18~1.46)</td><td class="num">2.10 (1.94~2.18)</td><td class="num"><b>0.46 / 0.43 / 0.71</b></td><td class="num">6.7 / 5.7 / 8.0%</td></tr>
+        <tr><td>DQN, 검증으로 고른 1개 (앞 공정 없음, 시드 0)</td><td class="num">0.96 (−10.8%)</td><td class="num">1.36 (+2.3%)</td><td class="num">1.94 (−5.4%)</td><td class="num">0.50 / 0.44 / 0.69</td><td class="num">5.1 / 4.4 / 7.4%</td></tr>
+        <tr><td>PPO 10개 평균 (범위)</td><td class="num">1.33 (1.17~1.50)</td><td class="num">1.69 (1.49~1.91)</td><td class="num">2.60 (2.19~2.74)</td><td class="num">0.47 / 0.48 / 0.76</td><td class="num">8.3 / 6.3 / 8.1%</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">값은 lot당 지연 D(시간) = 대기 + 그 lot이 일으킨 교체 시간. 괄호 안 %는 cov 대비. DQN 시드별 cov 대비(128 / 132 / 91): 앞 공정 없음 −11/+2/−5, −10/+1/+4, −2/−7/+6, −5/+5/0, −3/+2/+7; 앞 공정 있음 −11/−5/+3, +2/−11/+5, −13/−9/0, −2/+10/+2, −14/−8/+4. 시드 간 표준편차 5.7 / 6.9 / 3.6%p. 앞 공정 정보 유무의 차이는 이 흔들림 안입니다.</p>
+  </div>
+
+  <div class="block">
+    <h3>왜 처음엔 안 됐고 무엇을 고쳤나</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>판</th><th>바꾼 것</th><th>결과 (cov 대비 지연)</th><th>알게 된 것</th></tr></thead>
+      <tbody>
+        <tr><td>v1</td><td>PPO 첫 실행, 시드 5개</td><td>평균 +27~58%</td><td>첫 실행의 +4~12%는 운. 마지막 iter 모델을 그대로 써서 시드마다 크게 갈림</td></tr>
+        <tr><td>v2</td><td>검증으로 가장 좋은 시점 저장, 학습률 감소, 300회. DQN 첫 구현</td><td>PPO +13~103%, DQN +61~149%</td><td>검증 점수는 시험 순위와 맞음. 그런데 PPO·DQN 모두 학습할수록 나빠지거나 제자리</td></tr>
+        <tr><td>진단</td><td>cov를 RL 자리에 넣기, cov 행동 복제</td><td>검증 0.95, 복제 일치 99.7%</td><td>측정·망·상태·환경은 문제없음. <b>RL 결정의 99%가 기다리기</b>(장비가 빈 채로 몇 초~몇 분마다 다시 물음). 고르게 탐색하면 결정마다 1/3 확률로 교체해 "비자마자 교체"만 탐색하게 됨. 엔트로피 보너스도 같은 방향</td></tr>
+        <tr><td>v3</td><td>탐색 기준점을 "대부분 기다림"으로: PPO 처음 기다리기 99% + 엔트로피 0.003→0, DQN ε 탐색 교체 확률 2%</td><td>PPO 학습 보상은 크게 좋아졌지만 시험은 여전히 나쁨, DQN은 기다리기 100%로 붕괴</td><td>(PPO) 학습된 정책은 "결정마다 2~3% 확률로 교체" = 시간에 따른 교체 규칙인데, <b>argmax로 평가하면 "절대 교체 안 함"이 됨</b>. 같은 모델이 argmax 1.475 → 확률 그대로 0.954. (DQN) 1단계 목표가 Q를 수백 번 이어 붙여 max의 과대추정이 기다리기 쪽에 쌓임</td></tr>
+        <tr><td>v4</td><td>PPO는 검증·시험을 확률 정책 그대로, DQN은 <b>시간 기준 다단계 목표</b>(실제 보상을 0.5시간만큼 더한 뒤에만 Q로 이어 붙임)</td><td>DQN 평균 −6.9 / −2.0 / +2.6%, PPO +7~44%</td><td>결정이 촘촘한 SMDP에서는 탐색과 목표를 "결정 수"가 아니라 "시간" 기준으로 맞춰야 함</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>검증과 공장으로 넘어가는 조건</h3>
+    <ul>
+      <li><b>검증 점수:</b> 시드 1 기록의 고정 14일 구간 9개(장비군 3 × 시작일 3, 고장 시드 고정)에서 정책 비용 ÷ cov 비용. cov를 RL 자리에 넣으면 0.952이고 구간별로 0.79~1.13까지 흔들려서, 평균 ±0.05 차이는 잡음으로 봅니다. DQN은 10개 모두 0.81~0.88, PPO는 0.95~1.24.</li>
+      <li><b>미리 정한 조건:</b> 검증 점수로 고른 정책 1개가 작은 환경 시험에서 (1) 세 장비군 모두 cov보다 지연이 짧고 (2) hot lot 지연이 나빠지지 않을 때만 공장 최종 검증(새 시드 4~6, 2년)으로 갑니다.</li>
+      <li><b>현재 판정:</b> 고른 정책(DQN 앞 공정 없음 시드 0)은 (2)는 통과, (1)은 132가 +2.3%라 미통과입니다. 이 차이는 검증 잡음 범위 안이지만, 조건을 바꾸려면 결과를 본 뒤에 바꿨다는 사실을 함께 적어야 합니다. 진행 여부는 팀 판단입니다.</li>
+      <li><b>시험 결과로 고르지 않는 이유:</b> 시험만 보면 DQN 앞 공정 있음 시드 2(−13 / −9 / +0.2%, 전체 −7.4%)가 가장 좋지만, 이를 고르면 시험 데이터가 더 이상 "처음 보는 데이터"가 아닙니다.</li>
+    </ul>
+  </div>
+
+  <h3>이전 기록 (v1)</h3>
+  <p>재생 환경을 gymnasium 형식으로 감싸고(<code>src/implant_gym.py</code>), 수업 9장 구조대로 PPO를 직접 구현해(<code>experiments/ppo_implant.py</code>) 처음 돌려 봤습니다. 상태 29개, 행동 A1, 보상 R1, 장비군 3개 공유 정책입니다.</p>
+  <div class="flow">
+    <div><span class="k">학습</span><span class="v">도착 기록 시드 1에서 14일 구간을 무작위로 뽑음. 환경 8개 × 256 step × 150번 = 약 31만 결정. 한 번에 2~5분</span></div>
+    <div><span class="k">시험</span><span class="v">학습에 안 쓴 기록 시드 2·3 × 고장 시드 1·2, 240일 전체. 장비군마다 4번 평균</span></div>
+    <div><span class="k">지표</span><span class="v">lot당 지연 D = 대기 + 그 lot이 일으킨 교체 시간 (시간). 낮을수록 좋음</span></div>
+    <div><span class="k">설정</span><span class="v">clip 0.2, K 4, 미니배치 256, 학습률 3e-4, 엔트로피 0.01, γ 0.9/시간, 학습 시드 1개</span></div>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>정책</th><th class="num">Implant_128</th><th class="num">Implant_132</th><th class="num">Implant_91</th><th>메모</th></tr></thead>
+    <tbody>
+      <tr><td>기본 규칙 lssu</td><td class="num">2.19</td><td class="num">2.31</td><td class="num">3.62</td><td>SMT2020 기본</td></tr>
+      <tr><td><b>cov (튜닝 규칙)</b></td><td class="num"><b>1.08</b></td><td class="num"><b>1.33</b></td><td class="num"><b>2.05</b></td><td>현재 최강</td></tr>
+      <tr><td>PPO, 앞 공정 없음</td><td class="num">1.23</td><td class="num">1.53</td><td class="num">2.25</td><td>λ 0.95/step</td></tr>
+      <tr><td>PPO, 앞 공정 있음</td><td class="num">1.63</td><td class="num">2.03</td><td class="num">3.76</td><td>결정의 85%가 기다리기</td></tr>
+      <tr><td>PPO, 앞 공정 없음, λ 시간 기준</td><td class="num">1.16</td><td class="num">1.55</td><td class="num">2.17</td><td>λ 0.5/시간</td></tr>
+      <tr><td>PPO, 앞 공정 있음, λ 시간 기준</td><td class="num">1.54</td><td class="num">2.63</td><td class="num">2.91</td><td>결정의 95%가 기다리기</td></tr>
+      <tr><td><b>PPO, 앞 공정 있음(log), λ 시간 기준</b></td><td class="num"><b>1.12</b></td><td class="num"><b>1.40</b></td><td class="num"><b>2.30</b></td><td>cov 대비 +4 / +6 / +12%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>첫 실행 결과: PPO가 기본 규칙은 크게 이겼지만(지연 −36~49%), cov는 아직 못 이겼습니다.</b><span>가장 좋은 설정이 cov보다 4~12% 깁니다. 학습 시드 1개, 튜닝 없이 2~5분 학습한 결과라 결론이 아니라 출발점입니다.</span></div>
+  <div class="block">
+    <h3>학습 시드 5개로 다시 돌린 결과 (λ 시간 기준, 150회 반복)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>상태</th><th>장비군</th><th class="num">cov</th><th class="num">PPO 시드 0 / 1 / 2 / 3 / 4</th><th class="num">PPO 평균</th><th class="num">평균 cov 대비</th><th class="num">가장 좋은 시드</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="3" class="grp">앞 공정 있음</td><td>Implant_128</td><td class="num">1.08</td><td class="num">1.12 / 1.15 / 1.37 / 1.68 / 1.56</td><td class="num">1.38</td><td class="num">+27%</td><td class="num">+4%</td></tr>
+        <tr><td>Implant_132</td><td class="num">1.33</td><td class="num">1.40 / 1.59 / 1.42 / 2.65 / 2.30</td><td class="num">1.87</td><td class="num">+41%</td><td class="num">+5%</td></tr>
+        <tr><td>Implant_91</td><td class="num">2.05</td><td class="num">2.30 / 3.37 / 3.24 / 3.73 / 3.53</td><td class="num">3.23</td><td class="num">+58%</td><td class="num">+12%</td></tr>
+        <tr><td rowspan="3" class="grp">앞 공정 없음</td><td>Implant_128</td><td class="num">1.08</td><td class="num">1.16 / 1.69 / 1.68 / 1.37 / 1.12</td><td class="num">1.40</td><td class="num">+30%</td><td class="num">+3%</td></tr>
+        <tr><td>Implant_132</td><td class="num">1.33</td><td class="num">1.55 / 2.64 / 2.65 / 2.15 / 1.50</td><td class="num">2.10</td><td class="num">+58%</td><td class="num">+13%</td></tr>
+        <tr><td>Implant_91</td><td class="num">2.05</td><td class="num">2.17 / 3.73 / 3.53 / 2.75 / 2.19</td><td class="num">2.88</td><td class="num">+40%</td><td class="num">+6%</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn"><b>첫 실행의 "cov 대비 +4~12%"는 운이 좋은 시드였습니다.</b><span>시드 5개 평균은 cov보다 27~58% 길고, 시드에 따라 lssu(2.19 / 2.31 / 3.62)보다 나쁜 경우도 있습니다. 지금 학습은 시드마다 결과가 크게 갈리는 불안정한 상태입니다. 앞 공정 정보가 있고 없고의 차이도 이 흔들림에 묻혀 판단할 수 없습니다. 학습을 안정시키는 것이 먼저입니다(학습량 늘리기, 기다림 길이 행동 A2로 짧은 step 줄이기, 학습률·엔트로피 조정, 학습 중 cov 대비 평가로 가장 좋은 시점 저장).</span></div>
+  </div>
+  <div class="block">
+    <h3>돌려 보며 알게 된 것</h3>
+    <ul>
+      <li><b>입력 스케일이 결과를 크게 바꿨습니다.</b> 앞 공정 lot 수는 최대 11까지 커서 다른 변수(대부분 3 이하)보다 컸습니다. 그대로 넣었을 때는 정책이 거의 항상 기다리기를 골랐고, log(1+x)로 맞추자 앞 공정 없는 버전보다 128·132에서 좋아졌습니다.</li>
+      <li><b>짧은 step이 많아 앞을 보는 범위가 줄어드는 문제가 있습니다.</b> "기다리기"는 다음 사건(몇 분 뒤)에 다시 묻기 때문에 짧은 step이 많이 생깁니다. GAE의 λ를 step마다 곱하면 보는 범위가 시간상 짧아지고, 바꾸는 순간 한꺼번에 잡히는 교체 비용을 피하려 기다리기에 치우칠 수 있습니다. λ도 흐른 시간 기준으로 바꾸자 앞 공정 없는 버전의 128·91이 조금 좋아졌습니다.</li>
+      <li><b>보상이 장비군 전체 기준입니다.</b> 한 장비의 결정 뒤에 들어오는 보상에는 다른 장비의 결정 효과도 섞입니다. 장비별로 보상을 나누는 방법은 아직 시험하지 않았습니다.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="diffusion">
+  <h2>확산로 후보 검토: 팀원 리서치를 우리 데이터로 대조</h2>
+  <div class="callout"><b>확산로는 전용 페이지로 옮겼습니다.</b><span>공장 확산 기록(240일 3벌)을 새로 뽑아 장비 내부 애니메이션, 한 사이클 따라가기, 할 일 1~5를 implant와 같은 틀로 정리했습니다: <a href="https://claude.ai/artifact/EkfqGH2Ggz2eJ2CVLzFmse">확산로 배치 RL 설계</a>. 주요 결론: 패밀리는 공정+제품이고, LVHM 확산 대기의 약 90%는 최소 배치가 모이는 시간이며, 팀원 베르누이 모델의 VI 정답과 Min 규칙 차이가 0~0.8%라 결정의 몫이 매우 작습니다. 아래는 이전 검토입니다.</span></div>
+  <p>팀원 리서치(후보 A 확산로 배치)를 SMT2020 원자료와 공장 시뮬레이터 코드로 다시 확인하고, 팀의 할 일 다섯 가지 기준으로 implant와 나란히 놓았습니다. 문헌 내용(Sharifullin 2026 등)은 이번에 다시 확인하지 않았습니다.</p>
+
+  <div class="callout good"><b>리서치의 데이터 숫자는 맞습니다.</b><span>LVHM 툴셋별 장비 수, 패밀리, 배치 크기, 처리 시간, 장비 1대 기준 도착률, 부하, CQT가 원자료에서 다시 계산한 값과 소수점까지 같습니다. 확산 장비에 패밀리 전환 셋업이 없다는 것도 맞습니다(route의 <code>SETUP</code>이 확산 공정에서 모두 빈 값).</span></div>
+
+  <div class="block">
+    <h3>쓰는 데이터와 컬럼</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>파일</th><th>컬럼</th><th>확산로에서의 값</th></tr></thead>
+      <tbody>
+        <tr><td><code>route_*.txt</code></td><td><code>STNFAM</code>, <code>DESC</code>(패밀리 = 공정 이름), <code>PTIME</code>/<code>PTIME2</code>/<code>PTPER</code>, <code>BATCHMN</code>/<code>BATCHMX</code>(웨이퍼 수, ÷25 = lot), <code>SETUP</code></td><td>HVLM 확산 공정 28개, LVHM 135개. 모두 <code>per_batch</code>. 배치 처리 5.3~9.0시간. 셋업 없음</td></tr>
+        <tr><td><code>route_*.txt</code> (앞 공정 행)</td><td><code>STEP_CQT</code>, <code>CQT</code>, <code>CQTUNITS</code></td><td>앞 공정에서 확산로까지 시간 제약. 468·109 공정 10시간, 325 공정 8시간, 635 공정 4시간</td></tr>
+        <tr><td><code>tool.txt</code></td><td><code>STNQTY</code></td><td>툴셋 10개, HVLM 2~12대 / LVHM 3~13대</td></tr>
+        <tr><td><code>order.txt</code></td><td><code>REPEAT</code>, <code>LOTSPERRPT</code>, <code>PRIOR</code></td><td>도착률 계산. HVLM은 제품 2종이 각각 51.69분마다 투입</td></tr>
+        <tr><td>공장 코드 <code>greedy.py</code></td><td><code>max_batch</code>, <code>min_batch</code>, <code>demand_batch</code></td><td>배치 시작 규칙. Min과 Demand는 같은 규칙(EDA 03)</td></tr>
+        <tr><td>공장 기록</td><td>(아직 없음)</td><td>확산 도착 기록은 남기지 않았습니다. implant처럼 <code>events</code>를 뽑아야 재생 환경을 만들 수 있습니다</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>HVLM으로 다시 계산한 값 (리서치 표는 LVHM)</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>툴셋</th><th class="num">장비 수 HVLM / LVHM</th><th>패밀리 (배치 lot, 처리 시간, 장비 1대 도착률 lot/h), HVLM</th><th class="num">부하 꽉 찬 배치 / 최대−1</th><th>CQT</th></tr></thead>
+      <tbody>
+        <tr><td>Diffusion_FE_125</td><td class="num">4 / 5</td><td>004 (3~4, 7.34h, 0.298)</td><td class="num">0.55 / 0.73</td><td>없음</td></tr>
+        <tr><td>Diffusion_FE_120</td><td class="num">11 / 8</td><td>001 (5~6, 8.36h, 0.217), 109 (3~4, 6.66h, 0.217)</td><td class="num">0.66 / 0.84</td><td>109에 10h</td></tr>
+        <tr><td>Diffusion_BE_123</td><td class="num">12 / 9</td><td>468 (3~4, 7.68h, 0.199), 635 (4~5, 7.24h, 0.199)</td><td class="num">0.67 / 0.87</td><td>468에 10h, 635에 4h</td></tr>
+        <tr><td>Diffusion_FE_94</td><td class="num">11 / 13</td><td>325 (5~6), 336 (3~4), 358 (5~6)</td><td class="num">0.67 / 0.83</td><td>325에 8h</td></tr>
+      </tbody>
+    </table></div>
+    <p class="meta">HVLM은 장비 수가 달라 리서치 표의 숫자를 그대로 쓰면 안 됩니다. implant는 HVLM으로 진행 중이므로 데이터셋을 먼저 맞춰야 합니다.</p>
+  </div>
+
+  <div class="block">
+    <h3>할 일 다섯 가지 기준 대조</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>할 일</th><th>implant (지금)</th><th>확산로 (리서치 설계)</th><th>확인한 문제</th></tr></thead>
+      <tbody>
+        <tr><td>1 환경 통일</td><td>공장 도착 기록 재생. 재현 지표 3개 통과</td><td>장비 1대, 베르누이 도착(장비군 도착률 ÷ 장비 수)</td><td><span class="pill mid">공장과 연결 안 됨</span> 공장은 11대가 대기열 하나를 같이 씁니다. 001 공정은 첫 공정이라 도착이 투입 그대로, 즉 51.69분마다 2 lot씩 일정하게 옵니다. 베르누이와 다릅니다. 다른 패밀리도 앞 배치 공정에서 몰려 나올 수 있어 기록으로 확인해야 합니다</td></tr>
+        <tr><td>2 s 통일</td><td>29개, 두 환경이 같은 함수로 계산</td><td>패밀리별 대기 수 + 남은 처리 시간</td><td><span class="pill mid">보충 필요</span> 공장에 넣으려면 다른 장비들이 언제 비는지가 필요합니다. "직전 패밀리"는 셋업이 없어 의미가 없습니다</td></tr>
+        <tr><td>3 a·r 후보</td><td>교체/기다리기, 보상 −(대기 + 교체)</td><td>{기다리기, 패밀리 f 시작}, 보상 −대기 lot 수</td><td><span class="pill mid">결정 폭이 좁음</span> 최소 배치 미만으로는 시작할 수 없어서 실제 결정은 "최소 배치로 지금 시작 vs 1 lot 더 기다리기"와 두 패밀리가 다 찼을 때 어느 쪽인지뿐입니다(배치 3~4, 5~6 lot)</td></tr>
+        <tr><td>4 방법론</td><td>PPO, DQN 직접 구현. VI는 불가</td><td>VI 정답지 + Q-learning, DQN, MaskablePPO</td><td><span class="pill ok">강점</span> VI(수업 2장) 정답지는 implant에 없는 장점입니다. 다만 장비 1대 추상 모델에서만 정답입니다. MaskablePPO(SB3)는 과제 조건상 직접 구현해야 합니다</td></tr>
+        <tr><td>5 간단 실행</td><td>PPO 첫 실행, 시드 확대 중</td><td>아직 없음</td><td><span class="pill mid">공장 몫 작음</span> EDA 03에서 가장 극단적인 두 규칙(꽉 찰 때까지 기다리기 vs 최소 배치로 바로 시작)의 평균 CT 차이가 0.3% 이하였습니다</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="block">
+    <h3>꼭 알아야 할 세 가지</h3>
+    <ol>
+      <li><b>공장 시뮬레이터는 CQT를 계산하지 않습니다.</b> <code>instance.py</code> 156행에 "CQT handling, Deactivated for now"로 꺼져 있습니다. 리서치가 FE_120을 본 실험으로 고른 이유가 CQT인데, 지금 공장에서는 CQT 위반이 측정되지 않습니다. CQT를 쓰려면 공장 쪽에 직접 구현해야 하고, 그 구현이 맞는지 따로 검증해야 합니다.</li>
+      <li><b>확산로 안의 지표는 움직이지만 공장 CT는 거의 안 움직입니다.</b> EDA 03 배치 대기: HVLM 1.28일(Max) → 1.20일(Min), LVHM 5.01일 → 4.08일(−18%). 같은 조건에서 공장 평균 CT 차이는 0.1일 이하입니다. implant(cov)는 장비군 대기 −45%에 공장 CT −2.6%(신뢰구간이 0 포함)였으므로, "작은 환경 지표 개선 → 공장 확인" 계획에서는 implant 쪽이 공장까지 이어질 여지가 더 큽니다.</li>
+      <li><b>LVHM에서는 확산로가 더 의미 있습니다.</b> 배치 대기가 4~5일로 CT의 11~13%입니다(HVLM은 1.2일). 확산로로 간다면 LVHM이 맞고, implant(HVLM)와 데이터셋이 갈립니다.</li>
+    </ol>
+  </div>
+
+  <div class="callout"><b>제안: 확산로도 implant와 같은 틀로 갑니다.</b><span>(1) 공장 실행에서 확산 도착 기록을 뽑습니다(implant 기록 코드를 확산 툴셋으로 넓히면 됨). (2) 그 기록을 재생하는 장비군 환경을 만들고, 규칙(Max/Min)을 바꿨을 때 공장과 같은 만큼 움직이는지 재현 지표 ②로 확인합니다. (3) 리서치의 장비 1대 베르누이 모델은 VI 정답지를 내는 보조 실험으로 두고, "RL이 정답에 얼마나 가까운가"를 보여 주는 데 씁니다. CQT는 공장 구현이 필요하므로 팀이 범위를 정합니다.</span></div>
+</section>
+
+<section id="next">
+  <h2>다음 할 일</h2>
+  <ol>
+    <li><b>공장 최종 검증 여부 결정:</b> 조건대로 보류하고 학습 개선(장비군별 정책, 91 비중 늘리기, 시드 앙상블) vs 조건을 "전체 lot 기준 개선 + 어느 장비군도 +5% 초과 악화 없음"으로 고친다고 명시하고 진행. 준비는 끝남: <code>run_implant_setup.py --mode rl</code>, <code>experiments/run_fab_final.sh</code>, <code>pick_policy.py</code></li>
+    <li><b>PPO가 왜 DQN보다 뒤지는지:</b> on-policy라 드문 교체 사례를 한 번 쓰고 버림. 다단계 목표에 해당하는 것은 이미 GAE로 들어가 있어, 표본 효율 차이가 주원인으로 보임(미검증)</li>
+    <li><b>규칙 비교군 보강:</b> cov 기준값을 MAB로 고르기(5장), 미래를 모르는 rollout 계획</li>
+    <li><b>공장 검증:</b> 가장 좋은 정책을 <code>run_implant_setup.py</code>에 넣어 SMT2020 공장 2년, 시드 여러 개로 CT·납기·implant 대기 비교. 공장 쪽 상태 계산은 이미 같은 함수(<code>implant_state.py</code>)로 되어 있음</li>
+    <li><b>일반화:</b> 장비군 하나 빼고 학습, 장비 ±1~2대, LVHM</li>
+  </ol>
+  <h3>파일</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>파일</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/implant_state.py</code></td><td>두 환경이 함께 쓰는 상태 계산과 입력 변환</td></tr>
+      <tr><td><code>src/implant_env.py</code></td><td>작은 환경. 오늘 앞 공정 lot 수 계산 추가 (기존 결과 동일 확인)</td></tr>
+      <tr><td><code>src/implant_gym.py</code></td><td>gymnasium 감싸기, 마스킹, 시간 기준 할인용 정보, 구간 끝 truncated</td></tr>
+      <tr><td><code>experiments/ppo_implant.py</code></td><td>직접 구현한 PPO. <code>--wait_init</code>, <code>--ent_end</code>, <code>--eval_sample</code> (이전 판 <code>ppo_implant_v1.py</code>)</td></tr>
+      <tr><td><code>experiments/dqn_implant.py</code></td><td>직접 구현한 Double DQN. <code>--explore_switch</code>, <code>--nstep_h</code>(시간 기준 다단계 목표)</td></tr>
+      <tr><td><code>experiments/rl_common.py</code></td><td>망, 검증(체크포인트 고르기), 시험, 확률/argmax 행동</td></tr>
+      <tr><td><code>experiments/run_rl_v4.sh</code></td><td>최종 설정으로 PPO·DQN 각 10개</td></tr>
+      <tr><td><code>experiments/run_implant_setup.py</code></td><td>공장 실행. <code>--log_state</code>, <code>--log_prev</code>, <code>--mode rl</code>, <code>--cov_fb</code></td></tr>
+      <tr><td><code>experiments/run_fab_final.sh</code>, <code>pick_policy.py</code></td><td>공장 최종 검증(시드 4~6), 검증 점수로 정책 고르기</td></tr>
+      <tr><td><code>experiments/check_state.py</code>, <code>check_replay_fidelity.py</code></td><td>재현 지표 ②③, 빠진 정보 점검</td></tr>
+      <tr><td><code>results/rl_ppo/</code>, <code>results/rl_dqn/</code></td><td>학습 로그, 모델, 시험 결과 (<code>result_*_v4_s*.json</code>이 최종)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</div>

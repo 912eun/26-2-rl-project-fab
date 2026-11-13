@@ -1,0 +1,8 @@
+dataset=SMT2020_HVLM
+dispatcher=fifo
+mode=hold
+strategy=Demand
+days=730
+seed=3
+wall_seconds=4835
+simulator=PySCFabSim-revised@ae3d55e

@@ -1,0 +1,141 @@
+# 진행 상황 (2026-11-06 기준)
+
+강화학습개론 2026-2 팀 프로젝트. 다음 회의 전까지 할 일은 선행 연구 리서치, 해결할 문제의 정확한 정의, 보상 설계 변수(s, a, r, 환경), 적용할 방법론이다.
+이전 킥오프 가이드라인(https://claude.ai/artifact/EJAQdTkcHturWTCVtNUra4)은 간단히 맡겨서 만든 것이고, EDA로 처음부터 다시 검증하는 중이다.
+
+**2026-11-12 팀 합의:** 장비군 하나의 작은 환경에서 RL 학습 → SMT2020 공장 전체에 적용. 후보는 확산로, implant. 할 일: 환경 통일(재현 지표), s 통일, a·r 후보, 방법론, 간단 실행.
+- implant s·a·r 후보와 데이터 컬럼 매핑: `docs/implant_sar_mapping.md`
+- 정리 아티팩트: https://claude.ai/artifact/8D2UrQMXGViHDASqqgaEtV (`docs/implant_rl_design.html`)
+- 상태 29개(앞 공정 lot 수 추가, `prev_times.csv` 기록), 직접 구현 PPO(`experiments/ppo_implant.py`) 첫 실행: lssu는 −36~49%로 이겼고 cov보다는 +4~12% (학습 시드 1개). 다음: A2 행동, DQN 직접 구현, 시드 늘리기, 공장 검증.
+- 과제 조건: 알고리즘 직접 구현 필수(SB3는 참고용만).
+- 상태 점검(`experiments/check_state.py`): 재생·공장 상태 분포 KS ≤ 0.08, 스케일 변환 추가, 앞 공정 lot 수가 가장 큰 정보 공백(AUC 0.73→0.87, 30분).
+- **2026-11-12 저녁:** PPO 학습 시드 5개(`experiments/run_ppo_seeds.sh`): 평균 cov 대비 +27~58%, 시드별 편차가 커서 첫 실행 +4~12%는 운. 학습 안정화가 먼저. 확산로 팀원 리서치 검토(아티팩트 '확산로 후보 검토'): 숫자는 맞지만 LVHM 기준, 공장 시뮬레이터 CQT 꺼짐(`instance.py:156`), 결정 폭은 최소 배치 vs 1 lot 더. 아티팩트에 장비 내부 애니메이션·한 사이클 애니메이션·데이터 양 절 추가.
+- 재현 지표 추가: 규칙을 바꿨을 때 재생 환경과 공장의 implant 대기 변화가 9개 조합 모두 같은 순위, 차이 2%p 이하 (`experiments/check_replay_fidelity.py`).
+- **2026-11-13 RL:** 공통 모듈 `experiments/rl_common.py`(검증: 시드 1 고정 14일 구간 9개, cov 대비 비용 비율로 최고 체크포인트 저장), DQN 직접 구현 `experiments/dqn_implant.py`(Double DQN). v2(검증 체크포인트 + lr 감소, `run_rl_v2.sh`)도 cov 대비 +13~149%로 실패, 13개 남기고 중단. 진단(`scratchpad` bc.py): cov를 RL 자리에 넣으면 검증 0.95(구간별 0.79~1.13, ±0.05는 잡음), cov 행동 복제 일치 99.7%·검증 0.96~1.04(망·상태·환경은 문제없음). 원인: RL 결정의 99%가 기다리기인데 탐색이 결정마다 고르게 일어나 교체를 남발(엔트로피 보너스도 같은 방향). v3(`run_rl_v3.sh`): PPO 처음 기다리기 99% + 엔트로피 0.003→0, DQN ε 탐색 교체 확률 2%. 데이터 나누기 정리: 시드 1 = 튜닝·학습·검증, 2·3 = 작은 환경 시험, 4~6 = 공장 최종 검증(`run_fab_final.sh`, 정책은 `pick_policy.py`가 검증 점수로 고름). 공장 검증은 작은 환경 시험에서 세 장비군 모두 cov보다 나을 때만. 이전 공장 2년 cov 검증은 시드 1이 학습 기록과 겹치고(약 8%), 고치기 전 cov 값이었음. 공장 RL 모드: `run_implant_setup.py --mode rl`, `--cov_fb`.
+- **2026-11-13 v3→v4 결과:** v3에서 PPO는 argmax 평가가 학습한 "결정마다 작은 확률로 교체" 규칙을 지움을 확인(같은 모델 argmax 1.475 → 확률 그대로 0.954) → `--eval_sample`. DQN은 v3에서도 기다리기 1.00으로 붕괴 → 시간 기준 다단계 목표 `--nstep_h 0.5`. v4(`run_rl_v4.sh`) 20개, 작은 환경 시험 cov 대비 지연(128/132/91/lot 가중): DQN 10개 평균 −6.9/−2.0/+2.6/−2.2% (표준편차 5.7/6.9/3.6/3.4), lot 가중 10개 중 8개 개선, hot lot 지연 10개 모두 개선. PPO 10개 모두 +7~44% 악화. 검증으로 고른 정책(`pick_policy.py`) = DQN noup s0: −10.8/+2.3/−5.4, lot 가중 −5.0% → 미리 정한 "세 장비군 모두 cov보다 나음" 조건 미통과(132 +2.3%, 검증 잡음 ±5% 안). 공장 검증 진행 여부는 사용자 판단 대기.
+- **2026-11-13 공장 최종 검증 시작:** 사용자 결정으로 진입 조건을 "전체 lot 기준 cov보다 짧고, 어느 장비군도 +5% 초과 악화 없음"으로 고침(결과 본 뒤 고쳤음을 보고서에 명시). `run_fab_final.sh`: lssu, cov(--cov_fb), DQN noup v4 s0 × 시드 4~6, 2년, 로그 `results/implant_setup/logs/final_*.log`. 팀원 PPO 결과(LVHM, 포아송 도착, 10분 기다리기, SB3 MaskablePPO, 최선 지연 교체 대비 −29~50%)와 차이 분석은 대화와 아티팩트에.
+- **2026-11-13:** 확산로 설계 아티팩트 https://claude.ai/artifact/EkfqGH2Ggz2eJ2CVLzFmse (`docs/diffusion_rl_design.html`). 확산 기록 첫 실행(HVLM Min, LVHM Min/Max, 240일, 시드 1 → `results/diffusion_logs/`, 스크립트 `notebooks/07_diffusion_*.py`). 패밀리는 공정+제품(리서치는 제품을 합쳐 배치가 2~7배 빨리 참). LVHM 확산 대기의 약 90%는 최소 배치가 모이는 시간, 팀원 베르누이 모델 VI 정답과 Min 차이 0.2% → 배치 시작 결정의 몫은 매우 작음.
+
+## 1. 지금 돌리고 있는 것 / 바로 이어서 할 것
+
+**배치 전략 실험** (EDA 03): 확산로 배치 시작 규칙 하나만 바꿨을 때 팹 사이클타임(CT)이 얼마나 바뀌는지 잰다.
+- 시뮬레이터: `external/PySCFabSim-revised` (제3자 코드, `PROVENANCE.md` 참고)
+- 조합: {HVLM-FIFO, LVHM-CR} × {Max, Min, RoundRobin, Demand}, 2년, 시드 1
+- 실행: `bash experiments/run_all_batch_strategies.sh` (nohup이라 터미널을 닫아도 돈다)
+- 진행 확인: `tail -n 2 results/batch_strat/logs/*.log` (10 시뮬레이션일마다 day / elapsed / ETA)
+- 첫 시도(진행 표시 없이 8개 병렬)는 56분 돌다가 중단했다. 2년 1회에 1시간 이상 걸리는 것으로 보인다.
+- 두 번째 시도(18:37 시작)는 18:55쯤 8개가 오류 없이 함께 죽었다(HVLM 130일, LVHM 160일 지점). 세션 종료 때 nohup만으로는 살아남지 못한 것으로 보인다.
+- **세 번째 시도: 2026-11-04 22:28 시작.** 스크립트를 `setsid` + `caffeinate -i`로 고쳤다. 예상 소요는 LVHM 약 80분, HVLM 약 100분이다(8개 병렬 기준). 덮개를 닫으면 멈출 수 있다.
+- 살아 있는지 확인: `ps ax | grep run_batch | grep -v grep`
+- 끝나면 `python3 notebooks/03_batch_strategies.py` → `results/eda03_*.csv`
+- 확인할 것: 전략별 CT·처리량·납기 준수, 기준값(Kopp/Mönch) 대비, 배치 대기, 확산 가동률, implant 셋업 비율
+- 권한: `/permissions`에 `Bash(python3 -W ignore experiments/run_batch_strategies.py:*)` 허용 규칙이 있다. 셸 스크립트(`bash experiments/...`)는 규칙에 없으므로 사용자가 `! bash experiments/run_all_batch_strategies.sh`로 직접 실행하거나 별도로 허용해야 한다.
+
+**→ 2026-11-05 01:14에 8개 모두 완료했다.** 결과는 `docs/eda03_batch_findings.md`에 정리했다.
+- Min과 Demand는 코드상 같은 규칙이다. 실제로 비교한 규칙은 3개다.
+- Max와 Min의 평균 CT 차이는 0.3% 이하다. 확산로 배치 시작 규칙은 평균 CT에 대한 레버가 작다.
+- HVLM 납기 준수는 80.8 / 75.8 / 52.6%로 크게 흔들린다. 시드 1개라 확인이 필요하다.
+- 원판 CT +20~50%를 Max 규칙으로 설명하는 가설은 약해졌다.
+
+**EDA 04 (implant 가스 셋업, 2026-11-05 완료):** `docs/eda04_implant_findings.md`
+- HVLM, 2년 실행. 가스 무시는 CT 113일, 기본 LSSU는 40.4일, 장비별 가스 고정은 44.0일이다. 납기 준수는 0 / 76 / 18%다.
+- LSSU는 원래 가스 대기열이 비자마자 교체한다. 장비군당 하루 14~27회이고, 미리 내다보지 않는다. 도착은 몰려서 온다(8시간 단위 분산/평균 1.6~3.5).
+- 판단: 결정이 의미 있고 보상도 우리가 설계할 수 있다. 다만 평균 CT로 이길 몫은 최대 약 4%다. 납기를 보상과 평가에 넣어야 차이가 드러날 것으로 본다.
+- 다음: 단순 개선 규칙(대기열이 가장 긴 가스로 교체, 교체 전 대기)이 LSSU를 이기는지 확인한다. 그다음 도착 기록 기반의 작은 implant 환경을 만든다.
+
+**EDA 05 (implant 단순 개선 규칙, 2026-11-06 완료):** `docs/eda05_implant_rules_findings.md`
+- 공장 전체 CT·납기에서 기본 규칙을 이긴 규칙은 없다(CT 39.9일 vs 40.1~40.8일, 납기 준수 86% vs 69~80%).
+- 30분 대기는 implant 안의 지표를 개선했다(교체 시간 21~36% 감소, 방문당 대기 8~25% 감소). 공장 CT로 이어지는 것은 확인되지 않았다. 기대 이득(Lot_3 약 0.38일)이 시드 편차(0.76일)보다 작다.
+- 납기 준수는 평균 CT가 납기 바로 아래에 있어서 CT 1일에 16~17%p 움직인다. EDA 04의 "납기가 implant에 민감" 해석은 약해졌다.
+- 다음 결정: implant 구간 지표를 목표로 작게 갈지, 후보를 다시 고를지(팀 판단).
+
+아래는 실행 조건이다.
+- 규칙: lssu(기준), longest(대기열이 가장 긴 가스로 교체, hot lot 우선은 유지), hold15, hold30(교체 전 15·30분 대기. hot lot과 PM 뒤는 예외)
+- HVLM, FIFO, 배치 Demand, 2년, 시드 1~3 = 12회. 최대 8개 병렬, 예상 4시간쯤.
+- 실행: `bash experiments/run_all_implant_rules.sh` (끝난 조합은 건너뛰므로 죽으면 다시 실행하면 이어서 돈다)
+- 진행: `tail -qn 1 results/implant_setup/logs/rules_*.log`, 생존: `ps ax | grep run_implant_setup | grep -v grep`
+- 정리: `python3 notebooks/05_implant_rules.py` → `results/eda05_*.csv`
+- 판단 기준: 같은 시드끼리 lssu와 비교한다. 아무 규칙도 못 이기면 RL 여지도 작다는 신호다.
+
+**선행 연구·데이터 딥리서치 (2026-11-06 완료):** `reports/제조 스케줄링 RL 선행연구와 데이터.md`, 근거 노트는 `research_notes/`.
+- 주제 범위를 제조 일반까지 넓혔다(사용자). 완전히 새로운 문제보다 기존 연구를 다른 관점·방법으로 개선하는 형식을 찾는다.
+- TU/e online FJSP 추천은 철회했다. 온라인 + 셋업 조합 미지원, Gym 인터페이스 아님.
+- Wang, Yang, Lin(C&IE 2026, implant + masking) 본문을 확인했다. hold를 다루지 않아 implant 1순위는 유지된다. 내용은 `docs/smt2020_rl_survey.md` 끝.
+- 후보 재평가: `docs/topic_candidates_reassessment.md`. Lassoued 고장 위험 관측안은 철회했다(코드상 장비당 고장 1회, 시작 직후). implant 교체 전 대기가 주 후보이고, 튜닝 규칙과 도착을 미리 아는 상한을 먼저 잰다. 주제는 미정이다.
+
+**EDA 06 (implant 규칙과 RL 몫, 2026-11-06):** 요약 `docs/implant_eda06_summary.html`, 아티팩트 https://claude.ai/artifact/A4AHzVpSy12nKc9gSPNmfi , 사전 기준 `docs/eda06_preregistration.md`.
+- 새 규칙 cov(대기 lot ÷ (가스 담당 장비 + 1))를 공장 전체 2년, 시드 3개로 검증: CT 39.90→38.85일, 납기 86.2→94.3%, implant 대기 약 45% 감소. CT 차이의 신뢰구간은 0을 포함한다.
+- 보정한 재생 환경에서 미래를 모르는 계획이 cov보다 주간 지연 10~14% 개선해 사전 기준을 통과했다. RL은 아직 학습하지 않았다.
+- 다음: 공장 시드 확대, RL 학습, LVHM·민감도, cov 선행 규칙 조사.
+
+## 2. 지금까지 알게 된 것 (요약)
+
+### 데이터
+- `data/raw/`: SMT2020_HVLM, SMT2020_LVHM(공정), SMAT2022(반송 레이아웃, LVHM_E 1개만 공개), MiniFab(텍스트 사양). 모두 읽기 전용이다. 출처는 `README.md`.
+- `Delay_32`는 가상 지연 스테이션 400대다. 이를 빼면 LVHM 913대로 문헌과 일치한다.
+- SMAT2022는 SMT2020 위에 반송 정보만 얹은 것이고, 짝은 LVHM이다.
+
+### EDA 결과
+- **EDA 01** (`docs/eda01_findings.md`)
+  - 정적 부하는 노광 96~97%가 최고, 건식 식각 91%다. 이 부분은 유효하다.
+  - 동적 분해(대기 48%, 확산 배치 대기 4.5% 등)는 **원판 PySCFabSim** 결과라 신뢰도가 낮다.
+- **EDA 02** (`docs/eda02_setup_findings.md`)
+  - implant 가스 셋업(3종, 60~80분, 최소 연속 처리 7 lot)을 넣으면 부하가 67%에서 100% 이상으로 뛴다.
+  - FIFO 실측 셋업 비율은 17.5%지만, 원판의 셋업 회피·최소 연속 처리 구현이 불완전해서 과대평가일 수 있다.
+  - 장비를 가스별로 전용하면 Implant_128은 11대 중 8대로 충분하다.
+- **시뮬레이터 충실도** (`docs/simulator_fidelity.md`)
+  - 원판 PySCFabSim은 기준값보다 CT가 +20~50% 길었고, 납기 준수는 0%였다.
+  - 리팩터링판은 ±3% 안에 들어왔다.
+  - 유력한 원인은 원판의 배치 규칙이다. 최대 배치가 찰 때까지 기다린다(`greedy.py:50`). 다만 다른 변경과 섞여 있다.
+  - 그래서 **"확산로는 레버가 작다"는 결론은 보류**했다. 배치 규칙 하나로 CT가 수십 % 바뀔 수 있다.
+
+### 리서치
+- `docs/dataset_research.md`: SMT2020 배경(MIMAC → SMT2020), SMAT2022, 관련 데이터셋
+  - Chiang 2010 배치 인스턴스, synthetic-fab-simulator, U-FAST 등
+  - 실팹 공개 데이터는 없다.
+- `docs/minifab_research.md`: MiniFab 사양과 선행 연구
+  - WSC 2009 ADP는 LBFS에 졌다. Stöckermann 2025 PPO −8.1% 지연.
+  - 축소판 VI 가능성을 정리했다.
+- `docs/smt2020_rl_survey.md`: SMT2020 RL 전수 조사(약 8건, 대부분 Gebser·Infineon·D-SIMLAB 그룹)
+  - 이긴 경우는 ES·GP로 팹 전체를 제어했을 때다(Tassel −7.7~16.7%, Kovács GP 지연 lot 77% → 40%).
+  - 진 경우는 PPO로 한 장비군만 제어했을 때다(Kovács 2022 확산 PPO, Stöckermann 노광만 PPO −5.7%).
+  - **셋업 전환은 Kovács GECCO 2023 GP가 암묵적으로 다뤘다.** "전용 연구 없음"이라고 쓰면 안 된다. 배치 시작/대기는 전용 연구가 없다.
+  - 최신 데이터: SMT2020 공식 개정판은 없다. Zenodo P-30(Shibata 2026, 30회 반복 로그, 원문 미확보), Heik 외 시뮬레이터 비교(Zenodo 15798604).
+- 논문 PDF: `docs/papers/`
+
+### 내린 판단
+- **차량(OHT/AMR) 디스패칭은 제외**한다. OHT 동작은 구현자가 정한 값이고 AMR은 거의 전부 가정이다. 반송은 CT의 5% 이하다.
+- **SMT2020 공정 데이터 안의 lot 수준 결정 하나를 떼어 축소 MDP로 만든다.**
+- 후보
+  - (1) 확산로 배치 시작/대기: 레버 재평가 중(EDA 03)
+  - (2) implant 가스 셋업 전환/전용: 레버 큼. 단 GECCO 2023과 겹치는 부분을 차별화해야 한다
+  - (3) 노광 디스패칭: 대기 비중은 가장 크지만 결정 레버가 불분명하다
+- **데이터셋: HVLM 중심으로 검토하기로 기울었다(2026-11-05, 사용자).** HVLM은 메모리 공장처럼 적은 종류를 대량으로 만드는 공장에 가깝다. LVHM은 일반화 확인용으로 쓴다. 팀 확정은 아니다.
+- **팀이 정할 것**: "팹 전체에 중요한 문제"(노광·팹 전체 디스패칭, 선행 연구와 정면 승부)로 갈지, "작지만 깔끔한 문제"(축소 MDP + VI 정답지)로 갈지
+
+## 3. 다음 할 일
+
+1. ~~EDA 03 결과 정리~~ 완료. 평균 CT 레버는 작다. 납기 목표로 남길지는 시드 3~5개 재실행 뒤 결정한다.
+   이어서 확인할 것: 장비군별 대기가 어디로 옮겨 갔는지, 원판과 리팩터링판의 Max 구현 비교.
+2. 셋업 회피 규칙이 있는 기준선에서 implant 셋업 비율을 다시 측정 → RL로 줄일 실제 여지 확인
+3. 후보 하나 선택 → 상태·행동·보상 정의, 축소판 크기, 기준선 휴리스틱 목록
+4. (선택) Heik 비교표에서 LVHM 제품별 기준값 전체 추출
+   - 위치: `data/external_refs/heik_zenodo15798604/`
+   - 원본: Zenodo 15798604
+
+## 4. 폴더 구조
+
+```
+project/
+├── README.md                 데이터 출처·형식
+├── data/raw/                 SMT2020_HVLM, SMT2020_LVHM, SMAT2022, MiniFab (읽기 전용)
+├── data/processed/           pyscfabsim_fifo_runs/ (지난 프로젝트 원판 FIFO 실행 결과)
+├── src/smt2020.py            로더 + 정적 용량 계산
+├── notebooks/                01_where_is_the_time.py, 02_setup_load.py, 03_batch_strategies.py
+├── experiments/              run_batch_strategies.py, run_all_batch_strategies.sh
+├── external/PySCFabSim-revised/
+├── results/                  eda01_*, eda02_*, batch_strat/
+└── docs/                     STATUS.md(이 파일), eda01·02 findings, simulator_fidelity, 리서치 3종, papers/
+```
+
+git은 아직 만들지 않았다(사용자 결정으로 미룸).
