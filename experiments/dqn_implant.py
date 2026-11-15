@@ -75,7 +75,9 @@ def main():
     p.add_argument("--target_every", type=int, default=2000, help="경사 몇 번마다 타깃 망 복사")
     p.add_argument("--learn_start", type=int, default=10_000)
     p.add_argument("--eps_end", type=float, default=0.05)
-    p.add_argument("--eps_frac", type=float, default=0.3, help="전체 step 중 ε을 1에서 eps_end로 줄이는 비율")
+    p.add_argument("--eps_frac", type=float, default=0.3, help="전체 step 중 ε을 1에서 eps_end로 줄이는 비율 (--eps_steps가 없을 때)")
+    p.add_argument("--eps_steps", type=int, default=None,
+                   help="ε을 1에서 eps_end로 줄이는 step 수를 최대 학습량과 떼어 고정한다 (예: 360000). 주면 eps_frac 무시")
     p.add_argument("--val_every", type=int, default=20_480, help="환경 step 몇 번마다 검증 (PPO 10 iter와 같은 양)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--patience", type=int, default=0,
@@ -142,7 +144,8 @@ def main():
     next_val = a.val_every
     no_improve, stop_reason = 0, "max"
     while step < a.steps:
-        eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / (a.eps_frac * a.steps))
+        eps_len = a.eps_steps if a.eps_steps else a.eps_frac * a.steps
+        eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / eps_len)
         for k, env in enumerate(envs):
             o, m = state[k]
             if rng.random() < eps:

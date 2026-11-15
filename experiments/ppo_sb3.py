@@ -110,7 +110,8 @@ class TrainCallback(BaseCallback):
     def _on_rollout_end(self):
         a = self.a
         if a.ent_end is not None:
-            self.model.ent_coef = a.ent + (a.ent_end - a.ent) * self.it / max(a.iters - 1, 1)
+            D = a.decay_iters or a.iters
+            self.model.ent_coef = a.ent + (a.ent_end - a.ent) * min(self.it / max(D - 1, 1), 1.0)
         row = dict(it=self.it, sim_days=self.sim_h / 24, mean_r=self.r_sum / max(self.n, 1),
                    wait_share=self.waits / max(self.n, 1), sec=time.time() - self.t0)
         self.r_sum = self.n = self.waits = 0
@@ -152,6 +153,9 @@ def main():
     p.add_argument("--ent_end", type=float, default=0.0)
     p.add_argument("--wait_init_rate_h", type=float, default=0.3, help="처음 정책의 교체 빈도(쉬는 장비 1시간당). 없애려면 음수")
     p.add_argument("--wait_min", type=float, default=0)
+    p.add_argument("--decay_iters", type=int, default=None,
+                   help="학습률·엔트로피를 줄이는 구간(rollout 수)을 최대 학습량(--iters)과 떼어 고정한다. 없으면 --iters")
+    p.add_argument("--lr_floor", type=float, default=0.0, help="학습률 하한 (처음 학습률 대비 비율, 예: 0.1)")
     p.add_argument("--val_every", type=int, default=10)
     p.add_argument("--patience", type=int, default=0,
                    help="0보다 크면 조기 종료: 가장 좋은 검증 점수가 min_delta 이상 좋아지지 않은 검증이 이 횟수만큼 연속이면 멈춘다(--iters는 최대)")
@@ -173,8 +177,15 @@ def main():
                                                               rng_seed=a.seed * 100 + i, wait_min=a.wait_min))
                         for i in range(a.envs)])
     rep_dt = (a.wait_min / 60) if a.wait_min > 0 else G.EVENT_DT_H
+    total = a.iters * a.envs * a.T
+    decay_steps = (a.decay_iters or a.iters) * a.envs * a.T
+
+    def lr_sched(prog):
+        """SB3가 주는 남은 진행률(1→0)을 지난 step으로 바꿔, decay_iters 동안 선형으로 줄이고 lr_floor 아래로는 안 내린다."""
+        done = (1 - prog) * total
+        return a.lr * max(1 - done / decay_steps, a.lr_floor)
     model = MaskablePPO(
-        "MlpPolicy", venv, learning_rate=lambda prog: a.lr * prog, n_steps=a.T, batch_size=a.mb, n_epochs=a.K,
+        "MlpPolicy", venv, learning_rate=lr_sched, n_steps=a.T, batch_size=a.mb, n_epochs=a.K,
         gamma=a.gamma_h ** rep_dt, gae_lambda=a.lam, clip_range=a.clip, ent_coef=a.ent, vf_coef=0.5, max_grad_norm=0.5,
         rollout_buffer_class=TimeGAEBuffer, seed=a.seed, device="cpu", verbose=0,
         policy_kwargs=dict(net_arch=dict(pi=[64, 64], vf=[64, 64]), activation_fn=nn.Tanh))
