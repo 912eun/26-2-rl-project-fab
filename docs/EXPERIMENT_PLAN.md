@@ -17,7 +17,7 @@
 | 상태 s | **29개** = 기본 23개 + 앞 공정 lot 수 6개 (`src/implant_state.py`). 팀 결정 2026-11-13 |
 | 행동 a | {기다리기, 다른 가스 1로 교체, 다른 가스 2로 교체} + 마스크. **기다리기 길이는 E1로 정한다** |
 | 보상 r | R1 = −(대기 lot 수 × 시간 + 교체 시간) ÷ 장비 수. 고정 (이유: 6-1절의 주 지표와 같은 양이고, 굶기기를 스스로 벌줌) |
-| 알고리즘 | DQN, PPO 직접 구현. SB3는 교수님 답 전까지 참고용 |
+| 알고리즘 | DQN 직접 구현(`experiments/dqn_implant.py`). PPO는 **SB3 MaskablePPO**(`experiments/ppo_sb3.py`, 2026-11-15 교수님 답: 라이브러리 사용 허용, 채점은 설계와 기법 구현). PPO에 붙인 우리 기법: 시간 기준 할인 GAE, 탐색 기준점, 엔트로피·학습률 감소, 우리 검증으로 시점 저장. 직접 구현 PPO(`ppo_implant.py`)는 v4 결과 재현용으로 남긴다 |
 | 비교 기준 | cov(압력 규칙, 기록 시드 1에서 튜닝). lssu(공장 기본)는 맥락용 |
 | 정책 구조 | 세 장비군이 정책 하나를 공유 |
 | hot lot | hot lot이 있으면 RL에게 묻지 않고 cov가 처리. 고정 시간 기다리는 중에도 hot lot이 오면 기다림을 푼다 |
@@ -43,8 +43,8 @@
 ```bash
 # DQN
 python3 experiments/dqn_implant.py --steps 600000 --nstep_h 0.5 --explore_rate_h 0.6 --wait_min <W> --suffix _<태그> --seed <s>
-# PPO
-python3 experiments/ppo_implant.py --iters 300 --lam 0.95 --lam_time --lr_decay --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --eval_sample --wait_min <W> --suffix _<태그> --seed <s>
+# PPO (SB3 MaskablePPO + 우리 환경·시간 기준 GAE·검증)
+python3 experiments/ppo_sb3.py --iters 300 --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --wait_min <W> --suffix _<태그> --seed <s>
 ```
 
 - `--wait_min 0`(기본)은 "다음 사건까지 기다리기", 0보다 크면 "W분 동안 다시 묻지 않기".
@@ -127,7 +127,7 @@ python3 experiments/analyze.py --compare <조건A> <조건B>         # Welch t (
 | E1b | 할인 γ | E1에서 고른 길이로 `--gamma_h` 0.8 / 0.9 / 0.95 × DQN, PPO (0.9는 E1 결과 재사용) | 각 3 | 검증 점수로 γ 확정(7-2절과 같은 규칙, 동점이면 0.9 유지). E3 전에 끝낸다 |
 | E3 | **최종 주 결과** | 확정 설계 × DQN, PPO | **각 10** | 시험, 6절 전부 |
 | E4 | 민감도 | DQN: `nstep_h` 0.25/0.5/1, `explore_rate_h` 0.3/0.6/1.2. PPO: `ent` 0.001/0.003/0.01 | 각 2~3 | 시험, 평균과 범위 |
-| E5 | 대안 비교 | 앞 공정 없음(`--no_upstream`), 다단계 목표 없음(`--nstep_h 0`), 탐색 기준점 없음(DQN `--explore_rate_h` 빼기, PPO `--wait_init_rate_h` 빼기), PPO argmax 평가(`evaluate.py`에서 `--stoch` 빼고 `--tag _argmax`) | 각 2~3 | 시험, 평균과 범위 |
+| E5 | 대안 비교 | 앞 공정 없음(`--no_upstream`), 다단계 목표 없음(`--nstep_h 0`), 탐색 기준점 없음(DQN `--explore_rate_h` 빼기, PPO `--wait_init_rate_h -1`), PPO argmax 평가(`evaluate.py`에서 `--stoch` 빼고 `--tag _argmax`) | 각 2~3 | 시험, 평균과 범위 |
 | E6 | 공장 검증 | E3에서 검증 점수로 고른 DQN 1개(조건 통과 시 PPO도) | 공장 시드 4~6 | 6-4절 |
 
 - E2(상태 통일 실험)는 팀이 29개로 정해서 없앴다.
