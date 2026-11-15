@@ -78,6 +78,10 @@ def main():
     p.add_argument("--eps_frac", type=float, default=0.3, help="전체 step 중 ε을 1에서 eps_end로 줄이는 비율")
     p.add_argument("--val_every", type=int, default=20_480, help="환경 step 몇 번마다 검증 (PPO 10 iter와 같은 양)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--patience", type=int, default=0,
+                   help="0보다 크면 조기 종료: 가장 좋은 검증 점수가 min_delta 이상 좋아지지 않은 검증이 이 횟수만큼 연속이면 멈춘다(--steps는 최대)")
+    p.add_argument("--min_delta", type=float, default=0.01)
+    p.add_argument("--min_steps", type=int, default=200_000, help="조기 종료를 이 step 전에는 하지 않는다")
     p.add_argument("--no_upstream", action="store_true")
     p.add_argument("--suffix", default="")
     p.add_argument("--wait_min", type=float, default=0, help="0보다 크면 '기다리기' = 이 분 동안 다시 묻지 않기 (팀 결정: 고정 시간)")
@@ -136,6 +140,7 @@ def main():
     step, n_upd, r_sum, r_n, waits, losses = 0, 0, 0.0, 0, 0, []
     sim_h = 0.0  # 모든 환경이 경험한 시뮬레이션 시간 합 (학습량을 날수 축으로 보기 위해)
     next_val = a.val_every
+    no_improve, stop_reason = 0, "max"
     while step < a.steps:
         eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / (a.eps_frac * a.steps))
         for k, env in enumerate(envs):
@@ -185,6 +190,7 @@ def main():
             row = dict(step=step, sim_days=sim_h / 24, eps=eps, mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
                        loss=float(np.mean(losses)) if losses else None, val=v, val_fam=vf, sec=time.time() - t0)
             log.append(row)
+            no_improve = 0 if v < best - a.min_delta else no_improve + 1
             if v < best:
                 best, best_step = v, step
                 torch.save(q.state_dict(), path)
@@ -192,10 +198,15 @@ def main():
                   f"손실 {row['loss'] or 0:.4f}  검증(cov=1) {v:.3f} {' '.join(f'{x:.2f}' for x in vf.values())}  "
                   f"최고 {best:.3f}@{best_step}  {(time.time() - t0) / 60:5.1f}분", flush=True)
             r_sum, r_n, waits, losses = 0.0, 0, 0, []
+            if a.patience > 0 and step >= a.min_steps and no_improve >= a.patience:
+                stop_reason = f"patience {a.patience} at step {step}"
+                print(f"[dqn_{tag}] 조기 종료: 검증 {a.patience}번 연속 {a.min_delta} 이상 개선 없음 (step {step})", flush=True)
+                break
     torch.save(q.state_dict(), OUT / f"dqn_{tag}_last.pt")
     print(f"[dqn_{tag}] 검증 최고 step {best_step} 점수 {best:.3f}로 시험", flush=True)
     res = C.test(ex, "dqn", path, use_up, f"dqn_{tag}", False, a.wait_min)
-    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), best_step=best_step, best_val=best, log=log, eval=res), indent=1))
+    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), best_step=best_step, best_val=best, steps_run=step, stop_reason=stop_reason,
+                                                                 sim_days=sim_h / 24, log=log, eval=res), indent=1))
 
 
 if __name__ == "__main__":

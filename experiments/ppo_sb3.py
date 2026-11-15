@@ -92,8 +92,11 @@ class TrainCallback(BaseCallback):
         self.it, self.sim_h, self.best, self.best_it, self.log = 0, 0.0, float("inf"), -1, []
         self.t0 = time.time()
         self.r_sum = self.n = self.waits = 0
+        self.no_improve, self.stop, self.stop_reason = 0, False, "max"
 
     def _on_step(self):
+        if self.stop:
+            return False  # 조기 종료
         buf = self.model.rollout_buffer
         infos = self.locals["infos"]
         dts = np.array([i.get("dt_h", 0.0) for i in infos], dtype=np.float32)
@@ -116,6 +119,10 @@ class TrainCallback(BaseCallback):
             net.load_state_dict(sb3_to_ac(self.model.policy))
             v, vf = C.validate(self.ex, "ppo", net, self.use_up, True, a.wait_min)
             row.update(val=v, val_fam=vf)
+            if v < self.best - a.min_delta:
+                self.no_improve = 0
+            else:
+                self.no_improve += 1
             if v < self.best:
                 self.best, self.best_it = v, self.it
                 torch.save(net.state_dict(), self.path)
@@ -125,6 +132,9 @@ class TrainCallback(BaseCallback):
                   f"날수 {row['sim_days']:.0f}  {(time.time() - self.t0) / 60:5.1f}분", flush=True)
         self.log.append(row)
         self.it += 1
+        if a.patience > 0 and self.it >= a.min_iters and self.no_improve >= a.patience:
+            self.stop, self.stop_reason = True, f"patience {a.patience} at iter {self.it}"
+            print(f"[{self.tag}] 조기 종료: 검증 {a.patience}번 연속 {a.min_delta} 이상 개선 없음 (iter {self.it})", flush=True)
 
 
 def main():
@@ -143,6 +153,10 @@ def main():
     p.add_argument("--wait_init_rate_h", type=float, default=0.3, help="처음 정책의 교체 빈도(쉬는 장비 1시간당). 없애려면 음수")
     p.add_argument("--wait_min", type=float, default=0)
     p.add_argument("--val_every", type=int, default=10)
+    p.add_argument("--patience", type=int, default=0,
+                   help="0보다 크면 조기 종료: 가장 좋은 검증 점수가 min_delta 이상 좋아지지 않은 검증이 이 횟수만큼 연속이면 멈춘다(--iters는 최대)")
+    p.add_argument("--min_delta", type=float, default=0.01)
+    p.add_argument("--min_iters", type=int, default=100, help="조기 종료를 이 rollout 수 전에는 하지 않는다")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_upstream", action="store_true")
     p.add_argument("--suffix", default="")
@@ -181,7 +195,8 @@ def main():
     torch.save(net.state_dict(), OUT / f"ppo_{tag}_last.pt")
     print(f"[{tag}] 검증 최고 iter {cb.best_it} 점수 {cb.best:.3f}로 시험", flush=True)
     res = C.test(ex, "ppo", path, use_up, tag, True, a.wait_min)
-    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), impl="sb3_maskable_ppo", best_it=cb.best_it,
+    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), impl="sb3_maskable_ppo", best_it=cb.best_it, iters_run=cb.it, stop_reason=cb.stop_reason,
+                                                            sim_days=cb.sim_h / 24,
                                                             best_val=cb.best, log=cb.log, eval=res), indent=1))
 
 
