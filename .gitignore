@@ -51,6 +51,7 @@ __pycache__/
 !/experiments/e1_prewait.py
 !/experiments/fab_report.py
 !/experiments/ppo_sb3.py
+!/experiments/run_e1.sh
 
 # results: 최종(v4) 모델과 결과 요약만
 /results/*
