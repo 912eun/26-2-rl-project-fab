@@ -27,7 +27,7 @@ python3 calibration/check_fidelity.py
 # 3) RL 학습 + 검증 + 시험 (한 번에 10~20분)
 #    (실험 규칙·태그·시드 수는 docs/EXPERIMENT_PLAN.md. 아래는 기본 설정, --wait_min 0 = 다음 사건까지)
 python3 experiments/dqn_implant.py --steps 600000 --nstep_h 0.5 --explore_rate_h 0.6 --wait_min 0 --suffix _try --seed 0
-python3 experiments/ppo_implant.py --iters 300 --lam 0.95 --lam_time --lr_decay --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --eval_sample --wait_min 0 --suffix _try --seed 0
+python3 experiments/ppo_sb3.py --iters 300 --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --wait_min 0 --suffix _try --seed 0   # SB3 MaskablePPO
 
 # 4) 공장 전체 시뮬레이터가 필요할 때만 (2년 1회에 1.5시간 이상)
 ./setup_simulator.sh
@@ -50,7 +50,8 @@ calibration/
 experiments/
   rl_common.py            망, 검증(체크포인트 고르기), 시험, argmax/확률 행동
   dqn_implant.py          직접 구현 Double DQN (+ 시간 기준 다단계 목표 --nstep_h)
-  ppo_implant.py          직접 구현 PPO (+ 행동 마스킹, 시간 기준 할인/GAE)
+  ppo_sb3.py              PPO = SB3 MaskablePPO + 시간 기준 GAE·탐색 기준점·우리 검증 (E1부터 사용)
+  ppo_implant.py          직접 구현 PPO (v4 결과 재현용)
   run_rl_v4.sh            최종 설정으로 PPO·DQN 각 10개(시드 0~4 × 앞 공정 정보 유무)
   pick_policy.py          검증 점수로 공장에 넣을 정책 고르기
   run_implant_setup.py    공장 전체 실행 (--mode lssu/hold/cov/rl, --log_events 로 도착 기록 뽑기)

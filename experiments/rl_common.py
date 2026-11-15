@@ -162,7 +162,7 @@ def test(ex, kind, path, use_up, tag, stoch=False, wait_min=0):
         res.setdefault(fam, {}).setdefault(kind, []).append(s)
     for (fam, rec, ss, k), s in ex.map(_rule_job, [(*j, k) for j in TEST for k in ("lssu", "cov")]):
         res.setdefault(fam, {}).setdefault(k, []).append(s)
-    print(f"\n[{tag}] 시험(기록 시드 2·3 × 고장 시드 1·2), lot당 지연 D(시간), hot lot 지연, 교체 시간 비율")
+    print(f"\n[{tag}] 시험(기록 시드 2·3 × 고장 시드 1~5), lot당 지연 D(시간), hot lot 지연, 교체 시간 비율")
     for fam, r in res.items():
         m = {k: np.mean([x["delay_h"] for x in v]) for k, v in r.items()}  # cov 대비 % = 평균 D끼리의 비율
         h = {k: np.mean([x["hot_delay_h"] for x in v]) for k, v in r.items()}
