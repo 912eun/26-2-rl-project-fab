@@ -28,6 +28,21 @@ VAL_DAYS = 14
 R_SCALE = 0.1
 
 
+class FreshPool:
+    """map을 부를 때마다 일꾼 n개를 새로 띄우고, 다 끝나면 모두 닫는 프로세스 풀 (2026-11-16).
+    일꾼을 학습 내내 재사용하면 검증마다 메모리가 쌓여 1000회 PPO에서 WSL 7.7GB를 넘겼고,
+    max_tasks_per_child(일꾼 교체)는 Python 3.12에서 교체 도중 가끔 멈췄다. 이 방식은 교체 동작이 없다.
+    일마다 난수 시드가 고정이라 검증·시험 숫자는 ProcessPoolExecutor(8)과 같다. 결과는 목록으로 돌려준다."""
+
+    def __init__(self, n=8):
+        self.n = n
+
+    def map(self, fn, items):
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(self.n) as ex:
+            return list(ex.map(fn, items))
+
+
 def mlp(n_in, n_out, h=64):
     return nn.Sequential(nn.Linear(n_in, h), nn.Tanh(), nn.Linear(h, h), nn.Tanh(), nn.Linear(h, n_out))
 
