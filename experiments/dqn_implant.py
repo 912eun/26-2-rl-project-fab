@@ -70,6 +70,9 @@ def main():
     p.add_argument("--buffer", type=int, default=200_000)
     p.add_argument("--batch", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--lr_decay_steps", type=int, default=0,
+                   help="0보다 크면 학습률을 이 step까지 선형으로 줄이고 그 뒤로는 lr_floor 비율을 유지한다 (E4, 예: 720000). 0이면 고정")
+    p.add_argument("--lr_floor", type=float, default=0.1, help="학습률 하한 (처음 학습률 대비 비율, --lr_decay_steps가 있을 때만)")
     p.add_argument("--gamma_h", type=float, default=0.9, help="1시간당 할인")
     p.add_argument("--train_every", type=int, default=4, help="환경 step 몇 번마다 경사 1번")
     p.add_argument("--target_every", type=int, default=2000, help="경사 몇 번마다 타깃 망 복사")
@@ -180,6 +183,9 @@ def main():
                     y = br + (a.gamma_h ** bdt) * (1 - bterm) * v2
                 qsa = q(bo).gather(1, ba.unsqueeze(1)).squeeze(1)
                 loss = F.smooth_l1_loss(qsa, y)
+                if a.lr_decay_steps > 0:
+                    for g in opt.param_groups:
+                        g["lr"] = a.lr * max(1 - step / a.lr_decay_steps, a.lr_floor)
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(q.parameters(), 10.0)
@@ -191,14 +197,14 @@ def main():
         if step >= next_val or step >= a.steps:
             next_val += a.val_every
             v, vf = C.validate(ex, "dqn", q, use_up, False, a.wait_min)
-            row = dict(step=step, sim_days=sim_h / 24, eps=eps, mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
+            row = dict(step=step, sim_days=sim_h / 24, eps=eps, lr=opt.param_groups[0]["lr"], mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
                        loss=float(np.mean(losses)) if losses else None, val=v, val_fam=vf, sec=time.time() - t0)
             log.append(row)
             no_improve = 0 if v < best - a.min_delta else no_improve + 1
             if v < best:
                 best, best_step = v, step
                 torch.save(q.state_dict(), path)
-            print(f"[dqn_{tag}] step {step:7d}  ε {eps:.2f}  step당 보상 {row['mean_r']:8.3f}  기다리기 {row['wait_share']:.2f}  "
+            print(f"[dqn_{tag}] step {step:7d}  ε {eps:.2f}  lr {row['lr']:.1e}  step당 보상 {row['mean_r']:8.3f}  기다리기 {row['wait_share']:.2f}  "
                   f"손실 {row['loss'] or 0:.4f}  검증(cov=1) {v:.3f} {' '.join(f'{x:.2f}' for x in vf.values())}  "
                   f"최고 {best:.3f}@{best_step}  {(time.time() - t0) / 60:5.1f}분", flush=True)
             r_sum, r_n, waits, losses = 0.0, 0, 0, []
