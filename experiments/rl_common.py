@@ -43,6 +43,30 @@ class FreshPool:
             return list(ex.map(fn, items))
 
 
+def make_pool(n=8):
+    """검증·시험용 프로세스 풀. 숫자는 어느 쪽이든 같고 속도와 메모리만 다르다.
+    - 기본(맥, 또는 메모리 16GB 이상): ProcessPoolExecutor를 학습 내내 재사용 (빠름, 일꾼당 메모리가 1.2GB까지 쌓임).
+      맥은 메모리 압축·스왑으로 버텨서 E1 P2·P3가 이 방식으로 문제없이 돌았다.
+    - 맥이 아니고 메모리 16GB 미만(예: WSL 7.7GB): FreshPool (검증마다 새로 띄움, 1.5~2배 느리지만 최대 약 3GB).
+      WSL은 한도를 넘으면 프로세스를 죽여서 E1 P1에서 PPO가 600회 넘어 멈췄다.
+    - 환경 변수 FRESH_POOL=1 / 0 으로 강제할 수 있다."""
+    import os
+    env = os.environ.get("FRESH_POOL")
+    if env is not None:
+        fresh = env == "1"
+    else:
+        try:
+            mem_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+        except (ValueError, OSError, AttributeError):
+            mem_gb = 0
+        fresh = sys.platform != "darwin" and mem_gb < 16
+    print(f"검증 풀: {'FreshPool(매번 새로)' if fresh else 'ProcessPoolExecutor(재사용)'}", flush=True)
+    if fresh:
+        return FreshPool(n)
+    from concurrent.futures import ProcessPoolExecutor
+    return ProcessPoolExecutor(n)
+
+
 def mlp(n_in, n_out, h=64):
     return nn.Sequential(nn.Linear(n_in, h), nn.Tanh(), nn.Linear(h, h), nn.Tanh(), nn.Linear(h, n_out))
 
