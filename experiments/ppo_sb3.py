@@ -198,7 +198,8 @@ def main():
             model.policy.action_net.bias.copy_(torch.log(torch.tensor([wait_init, sw, sw])))
         print(f"wait_init_rate_h {a.wait_init_rate_h}/h, wait_min {a.wait_min} → 처음 기다리기 확률 {wait_init:.4f}", flush=True)
 
-    ex = ProcessPoolExecutor(8)
+    # 검증·시험마다 일꾼을 새로 띄우고 닫는다 (메모리 누적 방지, 숫자는 같다. rl_common.FreshPool 설명)
+    ex = C.FreshPool(8)
     cb = TrainCallback(a, tag, use_up, ex, path)
     model.learn(total_timesteps=a.iters * a.envs * a.T, callback=cb)
     net = C.ActorCritic()
