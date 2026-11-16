@@ -52,6 +52,7 @@ __pycache__/
 !/experiments/fab_report.py
 !/experiments/ppo_sb3.py
 !/experiments/run_e1.sh
+!/experiments/judge.py
 
 # results: 최종(v4) 모델과 결과 요약만
 /results/*

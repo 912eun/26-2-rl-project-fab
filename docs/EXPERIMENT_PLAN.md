@@ -167,6 +167,74 @@ python3 experiments/analyze.py --compare <조건A> <조건B>         # Welch t (
 - DQN은 1회 약 20분이라 1명, PPO는 1회 40~65분이라 2명. PPO 두 사람은 각 단계를 반씩 나눠 돌리고, 한 단계가 다 끝나 판정한 뒤 다음 단계로 간다(예: 학습률 9회를 5·4회로 → 판정 → γ 10회를 5·5회로).
 - WSL(메모리 16GB 미만)은 검증 풀이 자동으로 느린 방식이 되어 1.5배쯤 걸린다(`rl_common.make_pool`). 오래 걸리는 몫은 맥에서 돌린다.
 
+### 5-1. E1 이후 실행표 (2026-11-16)
+
+**시작 전 합의 (모두):**
+1. `develop` 최신으로 받기. 라이브러리 버전을 맞추거나 STATUS에 적는다: `pip freeze | grep -E "torch|stable|sb3|gymnasium|numpy"`. 버전이 다르면 같은 조건도 숫자가 조금 다를 수 있다.
+2. 같은 조건을 한 사람이 다 돌리지 않는다. 각 조건의 시드를 두 컴퓨터에 섞어 나눠서, 컴퓨터 차이가 조건 차이로 보이지 않게 한다(PPO 표).
+3. 단계가 끝나면 각자 결과를 PR로 올려 바로 합치고, 판정 담당이 `experiments/judge.py`로 판정해 STATUS에 적는다. 다음 단계는 그 STATUS 줄을 보고 시작한다.
+
+**공통 명령** (3-1과 같고 기다리기 40분):
+```bash
+DQN="python3 experiments/dqn_implant.py --steps 1200000 --eps_steps 360000 --nstep_h 0.5 --explore_rate_h 0.6 --wait_min 40"
+PPO="python3 experiments/ppo_sb3.py --iters 1000 --decay_iters 600 --lr_floor 0.1 --min_iters 600 --patience 15 --min_delta 0.01 --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --wait_min 40"
+# 뒤에 붙이는 것: 조건 옵션 + --suffix _<태그> --seed <s>. 학습이 끝나면 4절 ③(evaluate.py, PPO는 --stoch)과 ④를 한다.
+# ①② 판정은 검증 점수(result json)만 쓰므로 evaluate.py 전에 해도 된다.
+```
+나중 옵션이 앞 옵션을 덮어쓴다(argparse). 예: `$PPO --patience 0 --suffix _e4lrA --seed 0`.
+
+**① 학습률** (γ 0.9)
+
+| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+|---|---|---|---|---|---|
+| DQN 고정 | (E1 결과) | `e1w40` | 이미 있음(s0~4) | | |
+| DQN 감소 | `--lr_decay_steps 720000 --lr_floor 0.1` | `e4lrdec` | s0, 1, 2 | | |
+| PPO A | `--patience 0` | `e4lrA` | | s0, 1 | s2 |
+| PPO B | `--lr_floor 1.0 --patience 0` | `e4lrB` | | s0, 2 | s1 |
+| PPO C | `--decay_iters 1000 --lr_floor 0 --patience 0` | `e4lrC` | | s1 | s0, 2 |
+
+- PPO B도 `--decay_iters 600`을 유지한다(공통 명령에 있음). 이 값이 엔트로피 감소 기간도 정해서, 빼면 학습률 말고 엔트로피 일정까지 달라진다. C는 정의상 엔트로피도 1000회에 걸쳐 줄어든다.
+- 판정:
+  - DQN: `python3 experiments/judge.py --alg dqn --base e1w40 --cands e4lrdec`
+  - PPO: `python3 experiments/judge.py --alg ppo --base e4lrA:es --cands e4lrB:es e4lrC` (`:es` = 1000회 곡선에 조기 종료 규칙을 적용했을 때 멈췄을 시점까지의 가장 좋은 값. A·B는 실제로 E3에서 조기 종료로 돌리므로 그 기준으로 비교하고, C는 조기 종료가 없으므로 끝까지의 값)
+  - 바뀌면 그 뒤 모든 단계의 명령에 바뀐 학습률 옵션을 붙인다(PPO C로 바뀌면 `--decay_iters 1000 --lr_floor 0 --patience 0`).
+
+**② γ** (①에서 정한 학습률)
+
+| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+|---|---|---|---|---|---|
+| γ 0.8 | `--gamma_h 0.8` | `e1bg08` | s0~4 | s0, 1, 2 | s3, 4 |
+| γ 0.95 | `--gamma_h 0.95` | `e1bg095` | s0~4 | s3, 4 | s0, 1, 2 |
+| γ 0.9 | 학습률 그대로면 E1 결과(`e1w40`). 바뀌었으면 ①의 바뀐 조건(s0~2)에 s3, 4 추가(같은 태그) | | (바뀐 경우) s3, 4 | (바뀐 경우) s3 | (바뀐 경우) s4 |
+
+- 판정: `python3 experiments/judge.py --alg <dqn|ppo> --base <γ 0.9 태그> --cands e1bg08 e1bg095`. 기본 = γ 0.9라 "동점이면 0.9 유지"와 같다.
+- 여기서 **최종 설정**(40분, 학습률, γ)이 정해진다. STATUS에 최종 명령 한 줄을 적는다.
+
+**③ 최종 설정으로 E4 나머지·E5** (기준점 = ②의 최종 설정 실행 s0~4. 아래 옵션은 최종 설정 명령 뒤에 붙인다)
+
+| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+|---|---|---|---|---|---|
+| DQN `nstep_h` 0.25 / 1 | `--nstep_h 0.25` / `--nstep_h 1` | `e4n025` / `e4n1` | s0~2 각각 | | |
+| DQN `explore_rate_h` 0.3 / 1.2 | `--explore_rate_h 0.3` / `1.2` | `e4x03` / `e4x12` | s0~2 각각 | | |
+| DQN 앞 공정 없음 | `--no_upstream` | `e5` (파일은 `noup_e5`) | s0~2 | | |
+| DQN 다단계 목표 없음 | `--nstep_h 0` | `e5n0` | s0~2 | | |
+| DQN 탐색 기준점 없음 | `--explore_rate_h` 빼고 실행 | `e5x` | s0~2 | | |
+| PPO `ent` 0.001 / 0.01 | `--ent 0.001` / `--ent 0.01` | `e4e0001` / `e4e001` | | 0.001: s0, 1 · 0.01: s2 | 0.001: s2 · 0.01: s0, 1 |
+| PPO 앞 공정 없음 | `--no_upstream` | `e5` (파일은 `noup_lt_e5`) | | s0, 1 | s2 |
+| PPO 탐색 기준점 없음 | `--wait_init_rate_h -1` | `e5x` | | s2 | s0, 1 |
+| PPO argmax 평가 | 학습 없음: 최종 설정 모델 5개에 `evaluate.py --kind ppo --wait_min 40 --tag _argmax` (`--stoch` 빼기) | | | 맡음 | |
+
+- γ나 학습률이 기본에서 바뀌었으면 그 옵션도 같이 붙인다. "탐색 기준점 없음"은 그 옵션만 뺀다.
+
+**④ E3** (최종 설정, 태그 `e3`)
+
+| | DQN 담당 | PPO 1 | PPO 2 |
+|---|---|---|---|
+| 시드 | s10~19 | s10~14 | s15~19 |
+
+- ③과 같이 돌려도 된다. 둘 다 최종 설정이 정해진 뒤에만 시작한다.
+- 판정 담당(① ② 판정, STATUS 기록): DQN은 DQN 담당, PPO는 PPO 1. PPO 2(WSL이면 1.5배 느림)는 실행 수가 1개씩 적다.
+
 ## 6. 평가 지표
 
 ### 6-1. 주 지표: lot당 지연 D
