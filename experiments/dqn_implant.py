@@ -135,7 +135,8 @@ def main():
     qt.load_state_dict(q.state_dict())
     opt = torch.optim.Adam(q.parameters(), lr=a.lr)
     buf = Replay(a.buffer, G.N_OBS)
-    ex = ProcessPoolExecutor(8)
+    # 검증·시험마다 일꾼을 새로 띄우고 닫는다 (메모리 누적 방지, 숫자는 같다. rl_common.FreshPool 설명)
+    ex = C.FreshPool(8)
 
     log, t0 = [], time.time()
     best, best_step, path = float("inf"), -1, OUT / f"dqn_{tag}.pt"
