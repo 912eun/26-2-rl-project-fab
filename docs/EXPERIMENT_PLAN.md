@@ -167,7 +167,7 @@ python3 experiments/analyze.py --compare <조건A> <조건B>         # Welch t (
 
 **나눠 돌리기:** 알고리즘이나 조건 단위로 나눈다. 같은 (태그, 시드)를 두 사람이 돌리지 않게 아래 표에 이름을 먼저 적고 시작한다.
 
-| 실험 | DQN 담당 | PPO 담당 |
+| 실험 | DQN 담당 (서영) | PPO 담당 (태희, 영은) |
 |---|---|---|
 | E1 (길이 2개씩 나눔: `docs/E1_wait_length_design.md` E1-8) | 각자 맡은 길이의 DQN·PPO 둘 다 | |
 | E4 학습률 → E1b γ → E4 나머지·E5 → E3 (5절 진행 순서) | (1명) | (2명: 단계마다 시드를 반씩 나눔) |
@@ -195,7 +195,7 @@ PPO="python3 experiments/ppo_sb3.py --iters 1000 --decay_iters 600 --lr_floor 0.
 
 **① 학습률** (γ 0.9)
 
-| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+| 조건 | 덧붙일 옵션 | 태그 | DQN (서영) | PPO 1 (태희) | PPO 2 (영은) |
 |---|---|---|---|---|---|
 | DQN 고정 | (E1 결과) | `e1w40` | 이미 있음(s0~4) | | |
 | DQN 감소 | `--lr_decay_steps 720000 --lr_floor 0.1` | `e4lrdec` | s0, 1, 2 | | |
@@ -211,7 +211,7 @@ PPO="python3 experiments/ppo_sb3.py --iters 1000 --decay_iters 600 --lr_floor 0.
 
 **② γ** (①에서 정한 학습률)
 
-| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+| 조건 | 덧붙일 옵션 | 태그 | DQN (서영) | PPO 1 (태희) | PPO 2 (영은) |
 |---|---|---|---|---|---|
 | γ 0.8 | `--gamma_h 0.8` | `e1bg08` | s0~4 | s0, 1, 2 | s3, 4 |
 | γ 0.95 | `--gamma_h 0.95` | `e1bg095` | s0~4 | s3, 4 | s0, 1, 2 |
@@ -222,7 +222,7 @@ PPO="python3 experiments/ppo_sb3.py --iters 1000 --decay_iters 600 --lr_floor 0.
 
 **③ 최종 설정으로 E4 나머지·E5** (기준점 = ②의 최종 설정 실행 s0~4. 아래 옵션은 최종 설정 명령 뒤에 붙인다)
 
-| 조건 | 덧붙일 옵션 | 태그 | DQN 담당 | PPO 1 | PPO 2 |
+| 조건 | 덧붙일 옵션 | 태그 | DQN (서영) | PPO 1 (태희) | PPO 2 (영은) |
 |---|---|---|---|---|---|
 | DQN `nstep_h` 0.25 / 1 | `--nstep_h 0.25` / `--nstep_h 1` | `e4n025` / `e4n1` | s0~2 각각 | | |
 | DQN `explore_rate_h` 0.3 / 1.2 | `--explore_rate_h 0.3` / `1.2` | `e4x03` / `e4x12` | s0~2 각각 | | |
@@ -238,12 +238,12 @@ PPO="python3 experiments/ppo_sb3.py --iters 1000 --decay_iters 600 --lr_floor 0.
 
 **④ E3** (최종 설정, 태그 `e3`)
 
-| | DQN 담당 | PPO 1 | PPO 2 |
+| | DQN (서영) | PPO 1 (태희) | PPO 2 (영은) |
 |---|---|---|---|
 | 시드 | s10~19 | s10~14 | s15~19 |
 
 - ③과 같이 돌려도 된다. 둘 다 최종 설정이 정해진 뒤에만 시작한다.
-- 판정 담당(STATUS 기록까지): DQN ①② = DQN 담당. PPO ① = PPO 1, PPO ② = PPO 2.
+- 판정 담당(STATUS 기록까지): DQN ①② = 서영. PPO ① = 태희(PPO 1), PPO ② = 영은(PPO 2).
 
 ## 6. 평가 지표
 
