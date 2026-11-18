@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implant 가스 교체 실험 현황</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* 실험 노트 형식: 한 줄 결론, 상태 표시, 표 중심. 공정 장비 화면처럼 차분한 청회색에 파란 강조. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #17212b;
+  --muted: #566573;
+  --line: #d5dce3;
+  --accent: #1c5d99;
+  --good: #1e7a4c;
+  --warn: #9a6400;
+  --bad: #b23a3a;
+  --tint: #e8eff6;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171d; --surface: #182129; --ink: #e6ebf0; --muted: #9dabb8; --line: #2d3943;
+    --accent: #7fb5e6; --good: #62c594; --warn: #e0b35a; --bad: #ec8b8b; --tint: #1e2c38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171d; --surface: #182129; --ink: #e6ebf0; --muted: #9dabb8; --line: #2d3943;
+  --accent: #7fb5e6; --good: #62c594; --warn: #e0b35a; --bad: #ec8b8b; --tint: #1e2c38;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.7 var(--body); }
+main { max-width: 880px; margin: 0 auto; padding: 40px 20px 72px; display: grid; gap: 40px; }
+h1, h2, h3 { line-height: 1.3; text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; font-weight: 700; }
+h2 { font-size: 21px; font-weight: 700; padding-top: 18px; border-top: 2px solid var(--line); }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+section { display: grid; gap: 14px; }
+ul { margin: 0; padding-left: 20px; max-width: 68ch; display: grid; gap: 6px; }
+a { color: var(--accent); }
+code { font: 500 13.5px var(--mono); overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 14px; }
+.lead { font-size: 18px; font-weight: 500; }
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.pill { justify-self: start; font-size: 12.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid currentColor; }
+.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .run { color: var(--accent); }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 13px; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.key td { background: var(--tint); font-weight: 500; }
+.note { color: var(--muted); font-size: 14px; }
+.callout { background: var(--tint); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+.formula { font: 500 15px var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<header style="display:grid;gap:10px">
+  <h1>Implant 가스 교체 실험 현황</h1>
+  <p class="meta">강화학습개론 프로젝트 · SMT2020 HVLM · 2026-11-06 21:45 기준 · 공장 전체 검증 완료, RL은 아직 학습 전</p>
+  <p class="lead">상황을 보는 단순 규칙이 공장 전체에서 implant 대기를 약 45% 줄이고 CT를 평균 1.05일 줄였습니다. 미래를 모르는 계획이 이 규칙을 더 이겨서, 미리 정한 기준상 RL을 시도할 근거도 생겼습니다.</p>
+</header>
+
+<section>
+  <div class="status">
+    <div class="card"><span class="pill good">공장에서 확인 · 시드 3개</span><strong>새 규칙의 implant 효과</strong><span class="note">대기 43~49% 감소, 교체 시간 비율 약 절반 이하. 시드 3개 모두 같은 방향</span></div>
+    <div class="card"><span class="pill warn">방향은 일치 · 통계는 약함</span><strong>공장 CT와 납기</strong><span class="note">CT −1.05일, 납기 준수 +8.2%p. 시드가 3개라 신뢰구간이 0을 포함</span></div>
+    <div class="card"><span class="pill good">사전 기준 통과</span><strong>RL을 시도할 근거</strong><span class="note">미래를 모르는 계획이 새 규칙보다 주간 지연 10~14% 개선. RL이 학습한다는 보장은 아님</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>풀려는 문제</h2>
+  <p>implant 장비는 가스 3종 중 하나로 lot을 처리합니다. 지금 가스의 lot이 떨어지고 다른 가스 lot만 남으면, 장비는 바로 교체할지, 기다릴지, 어떤 가스로 바꿀지 정해야 합니다.</p>
+  <ul>
+    <li>교체에는 60~80분이 들고, 그동안 처리를 못 합니다.</li>
+    <li>교체하면 최소 7 lot을 그 가스로 처리해야 합니다. 그 가스의 lot이 없으면 다른 가스 일이 밀려 있어도 장비가 놀 수 있습니다.</li>
+    <li>정비와 고장이 끝나면 가스를 다시 맞춰야 합니다.</li>
+    <li>도착이 몰려서 옵니다. 바꾼 직후 원래 가스 lot이 오면 교체 시간을 괜히 쓴 셈입니다.</li>
+  </ul>
+  <div class="scroll"><table>
+    <thead><tr><th>장비군</th><th class="n">장비 수 (HVLM)</th><th class="n">교체 시간</th></tr></thead>
+    <tbody>
+      <tr><td>Implant_128</td><td class="n">10대</td><td class="n">72분</td></tr>
+      <tr><td>Implant_132</td><td class="n">8대</td><td class="n">60분</td></tr>
+      <tr><td>Implant_91</td><td class="n">6대</td><td class="n">80분</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>비교한 규칙</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>규칙</th><th>동작</th></tr></thead>
+    <tbody>
+      <tr><td>기본 (lssu)</td><td>지금 가스 일이 떨어지면 바로, 가장 오래 기다린 lot의 가스로 교체</td></tr>
+      <tr><td>고정 대기 (hold)</td><td>교체 전 정해진 시간만큼 기다림</td></tr>
+      <tr><td>임계값 (thr)</td><td>어떤 가스의 대기열이 기준 이상이면 교체, 아니면 일정 시간까지 기다림</td></tr>
+      <tr class="key"><td>새 규칙 (cov)</td><td>대기 lot 수를 그 가스를 맡은 장비 수로 나눠 일손이 가장 부족한 가스로 교체</td></tr>
+    </tbody>
+  </table></div>
+  <div class="formula">점수 = 가스의 대기 lot 수 ÷ (그 가스를 맡은 장비 수 + 1)</div>
+  <p>점수가 기준값 이상이면 그 가스로 교체하고, 아니면 일정 시간까지 기다립니다. 예를 들어 기준값이 5일 때, 가스 A에 12 lot이 밀렸고 이미 3대가 맡고 있으면 점수는 3이라 기다립니다. 가스 B에 12 lot이 밀렸고 맡은 장비가 없으면 점수는 12라 바로 교체합니다.</p>
+  <p class="note">hot lot이 기다리면 대기 없이 교체합니다. 정비나 고장 뒤에는 어차피 셋업이 필요하므로 기다리지 않습니다.</p>
+</section>
+
+<section>
+  <h2>공장 전체 결과</h2>
+  <p>PySCFabSim-revised로 HVLM 공장을 2년 돌린 값입니다. 시드 1~3의 평균이고, 지표는 2년째 투입 lot 기준입니다. 방문당 대기는 2년 누적 평균입니다.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>지표</th><th class="n">기본</th><th class="n">30분 대기</th><th class="n">새 규칙</th></tr></thead>
+    <tbody>
+      <tr class="key"><td>일반 lot 평균 CT</td><td class="n">39.90일</td><td class="n">40.11일</td><td class="n">38.85일</td></tr>
+      <tr class="key"><td>일반 lot 납기 준수</td><td class="n">86.2%</td><td class="n">79.8%</td><td class="n">94.3%</td></tr>
+      <tr><td>2년째 처리량</td><td class="n">18,568</td><td class="n">18,503</td><td class="n">18,672</td></tr>
+      <tr><td>Lot_3 CT</td><td class="n">52.22일</td><td class="n">52.57일</td><td class="n">50.72일</td></tr>
+      <tr><td>Lot_4 CT</td><td class="n">28.45일</td><td class="n">28.57일</td><td class="n">27.75일</td></tr>
+      <tr><td>Hot lot CT (3 / 4)</td><td class="n">32.03 / 18.58일</td><td class="n">31.99 / 18.51일</td><td class="n">32.03 / 18.46일</td></tr>
+      <tr><td>방문당 대기 128 / 132 / 91</td><td class="n">2.07 / 2.06 / 3.67시간</td><td class="n">1.54 / 1.86 / 3.38시간</td><td class="n">1.05 / 1.17 / 2.00시간</td></tr>
+      <tr><td>교체 시간 비율 128 / 132 / 91</td><td class="n">15.2 / 11.1 / 14.4%</td><td class="n">9.7 / 7.4 / 11.4%</td><td class="n">5.9 / 5.9 / 7.5%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="scroll"><table>
+    <thead><tr><th>새 규칙 − 기본</th><th class="n">시드 1</th><th class="n">시드 2</th><th class="n">시드 3</th></tr></thead>
+    <tbody>
+      <tr><td>일반 lot CT</td><td class="n">−1.25일</td><td class="n">−1.78일</td><td class="n">−0.14일</td></tr>
+      <tr><td>납기 준수</td><td class="n">+17.9%p</td><td class="n">+6.8%p</td><td class="n">−0.2%p</td></tr>
+      <tr><td>처리량</td><td class="n">+127</td><td class="n">+149</td><td class="n">+35</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><strong>규모가 앞뒤가 맞습니다.</strong> 방문 수 × 대기 감소로 계산한 절감은 Lot_3 약 1.1일, Lot_4 약 0.5일이고, 실제 CT 감소는 1.5일, 0.7일입니다. 대기가 다른 공정으로 크게 옮겨 간 신호는 이 수준에서 보이지 않습니다. 장비군별 대기를 직접 재지는 않았습니다.</li>
+    <li><strong>통계는 아직 약합니다.</strong> CT 차이의 평균은 −1.06일이고, 짝지은 t 기준 95% 신뢰구간은 약 −3.1 ~ +1.0일로 0을 포함합니다. 시드 1은 튜닝에 쓴 기록과 같은 시드입니다.</li>
+    <li><strong>납기 준수는 민감한 지표입니다.</strong> 평균 CT가 납기 바로 아래에 있어 CT 1일에 16~17%p 움직입니다.</li>
+    <li><strong>장비 시간 절약:</strong> 교체 시간 감소는 24대 중 약 1.8대분입니다(계산).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>재생 환경의 규칙 비교</h2>
+  <p>보정한 재생 환경에서, 시드 1 기록으로 파라미터를 고르고 시드 2, 3 기록으로 시험한 값입니다. 지연은 lot이 기다린 시간에 그 lot이 일으킨 교체 시간을 더한 값입니다.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>장비군</th><th>규칙</th><th class="n">평균 지연</th><th class="n">95% 지점</th><th class="n">교체 시간 비율</th><th class="n">고정 대기 대비 (95% CI)</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="4">Implant_128</td><td>기본</td><td class="n">2.18시간</td><td class="n">6.6시간</td><td class="n">14.9%</td><td class="n">+70.4% (+56.9 ~ +85.1)</td></tr>
+      <tr><td>고정 대기 90분</td><td class="n">1.49시간</td><td class="n">6.1시간</td><td class="n">5.3%</td><td class="n">기준</td></tr>
+      <tr><td>임계값</td><td class="n">1.47시간</td><td class="n">5.5시간</td><td class="n">6.9%</td><td class="n">+11.9% (+2.6 ~ +21.4)</td></tr>
+      <tr class="key"><td>새 규칙 (5, 120분)</td><td class="n">1.13시간</td><td class="n">4.2시간</td><td class="n">6.5%</td><td class="n">−17.1% (−24.6 ~ −8.8)</td></tr>
+      <tr><td rowspan="4">Implant_132</td><td>기본</td><td class="n">2.27시간</td><td class="n">7.1시간</td><td class="n">10.9%</td><td class="n">+30.3% (+19.9 ~ +41.8)</td></tr>
+      <tr><td>고정 대기 60분</td><td class="n">1.95시간</td><td class="n">7.2시간</td><td class="n">5.2%</td><td class="n">기준</td></tr>
+      <tr><td>임계값</td><td class="n">1.92시간</td><td class="n">6.4시간</td><td class="n">8.4%</td><td class="n">+9.0% (+0.6 ~ +17.6)</td></tr>
+      <tr class="key"><td>새 규칙 (3, 240분)</td><td class="n">1.23시간</td><td class="n">4.8시간</td><td class="n">5.9%</td><td class="n">−32.1% (−38.6 ~ −25.1)</td></tr>
+      <tr><td rowspan="4">Implant_91</td><td>기본</td><td class="n">3.71시간</td><td class="n">10.7시간</td><td class="n">14.2%</td><td class="n">+17.7% (+9.1 ~ +27.2)</td></tr>
+      <tr><td>고정 대기 30분</td><td class="n">3.46시간</td><td class="n">11.3시간</td><td class="n">11.5%</td><td class="n">기준</td></tr>
+      <tr><td>임계값</td><td class="n">3.15시간</td><td class="n">9.8시간</td><td class="n">10.3%</td><td class="n">−3.5% (−10.0 ~ +3.5)</td></tr>
+      <tr class="key"><td>새 규칙 (7, 240분)</td><td class="n">2.10시간</td><td class="n">7.1시간</td><td class="n">6.7%</td><td class="n">−35.7% (−40.6 ~ −30.5)</td></tr>
+    </tbody>
+  </table></div>
+  <p>새 규칙의 재생 대기(128 1.10, 132 1.19, 91 2.06시간)는 공장 전체 실행의 값(1.05, 1.17, 2.00시간)과 가깝습니다. 파라미터가 조금 달라 직접 비교는 아니지만, 재생 환경이 기본 규칙이 아닌 규칙에서도 크게 어긋나지 않는다는 근거입니다.</p>
+</section>
+
+<section>
+  <h2>RL이 더 이길 몫이 있나</h2>
+  <p>RL을 학습하기 전에, 행동마다 앞으로 8시간을 시뮬레이션해 가장 좋은 행동을 고르는 계획으로 몫을 가늠했습니다. 미래를 모르는 계획은 과거 도착으로 미래를 상상합니다. 조건을 먼저 고정한 확인 실험은 시나리오 10개, 새 고장 시드 3개입니다.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>장비군</th><th class="n">미래를 모르는 계획 − 새 규칙, 주간 (95% CI)</th><th class="n">전체 평균 지연</th><th class="n">시드 2, 3별 전체 평균</th><th class="n">교체 시간 비율 (계획 / 새 규칙)</th></tr></thead>
+    <tbody>
+      <tr class="key"><td>Implant_128</td><td class="n">−14.2% (−21.5 ~ −5.5)</td><td class="n">−21.5%</td><td class="n">−32.6%, −8.5%</td><td class="n">8.7 / 6.4%</td></tr>
+      <tr class="key"><td>Implant_132</td><td class="n">−13.5% (−19.6 ~ −6.6)</td><td class="n">−18.6%</td><td class="n">−17.9%, −19.2%</td><td class="n">6.7 / 5.8%</td></tr>
+      <tr class="key"><td>Implant_91</td><td class="n">−10.5% (−15.7 ~ −4.8)</td><td class="n">−14.5%</td><td class="n">−12.7%, −16.4%</td><td class="n">9.3 / 6.6%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><p><strong>사전 기준(평균 −3% 이하, 신뢰구간이 0을 포함하지 않음)을 세 장비군 모두 통과했습니다.</strong> 18개 조합 모두 계획이 새 규칙보다 지연이 짧았습니다. 그래서 RL을 시도합니다.</p></div>
+  <ul>
+    <li><strong>신뢰구간은 실제보다 좁을 수 있습니다.</strong> 시험 도착 기록은 2개뿐이고, 고장 시드 3개로 나눈 156주를 묶어 계산했습니다.</li>
+    <li><strong>교체는 늘어납니다.</strong> 계획은 지연을 줄이려고 장비 시간을 교체에 더 씁니다. 공장 전체 효과는 재지 않았습니다.</li>
+    <li><strong>계획은 RL이 아닙니다.</strong> 온라인으로 이길 몫이 있다는 근거이고, RL이 그것을 학습한다는 보장은 없습니다. 계획 자체도 240일 실행에 고장 시드당 3~16분이면 돌아가는 강한 경쟁자입니다.</li>
+  </ul>
+  <div class="scroll"><table>
+    <thead><tr><th>미래를 아는 계획 − 새 규칙, 주간 (시드 2, 3)</th><th class="n">Implant_128</th><th class="n">Implant_132</th><th class="n">Implant_91</th></tr></thead>
+    <tbody><tr><td>넘을 수 없는 상한이 아니라, 미래를 알면 적어도 이만큼 가능하다는 값</td><td class="n">−19.7%, −51.9%</td><td class="n">−35.7%, −29.1%</td><td class="n">−28.6%, −27.6%</td></tr></tbody>
+  </table></div>
+
+  <h3>탐색 결과 (보정 전 환경, 판정에 쓰지 않음)</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>앞으로 아는 도착</th><th class="n">Implant_128</th><th class="n">Implant_132</th><th class="n">Implant_91</th></tr></thead>
+    <tbody>
+      <tr><td>없음</td><td class="n">−8.9%</td><td class="n">−17.0%</td><td class="n">−7.8%</td></tr>
+      <tr><td>30분</td><td class="n">−10.4%</td><td class="n">−14.8%</td><td class="n">−12.8%</td></tr>
+      <tr><td>60분</td><td class="n">−17.6%</td><td class="n">−15.8%</td><td class="n">−5.6%</td></tr>
+      <tr><td>120분</td><td class="n">−9.8%</td><td class="n">−28.9%</td><td class="n">−16.4%</td></tr>
+      <tr><td>240분</td><td class="n">−28.6%</td><td class="n">−27.1%</td><td class="n">−13.6%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">시나리오 5개, 고장 시드 1개. 앞 공정 처리 시간의 중앙값은 약 23~70분이라 240분은 낙관적입니다. 앞 공정 lot을 보는 정보의 가치를 묻는 새 가설로만 다룹니다.</p>
+</section>
+
+<section>
+  <h2>환경을 얼마나 믿을 수 있나</h2>
+  <p>재생 환경은 공장 실행에서 implant 도착을 기록하고, 장비군 규칙을 그대로 옮겨 돌립니다. 240일 재생이 수 초 안에 끝납니다. 처음에는 Implant_132의 대기가 실제보다 19~26% 길었습니다. 132는 lot의 58%가 24시간 안에 같은 장비군으로 돌아오는데 도착이 고정이었기 때문으로 보고, 왕복 12시간 이하 재방문은 이번 처리 시각에 맞춰 도착하도록 고쳤습니다.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>기본 규칙의 대기, 재생 − 실제</th><th class="n">보정 전 (시드 1, 2, 3)</th><th class="n">보정 후 (시드 1, 2, 3)</th><th>기준 ±15%</th></tr></thead>
+    <tbody>
+      <tr><td>Implant_128</td><td class="n">+2%, +8%, −12%</td><td class="n">0%, +2%, −5%</td><td class="good">통과</td></tr>
+      <tr><td>Implant_132</td><td class="n">+13%, +23%, +26%</td><td class="n">+8%, +5%, +14%</td><td class="good">통과, 기준에 가까움</td></tr>
+      <tr><td>Implant_91</td><td class="n">−5%, −3%, 0%</td><td class="n">−2%, −7%, −5%</td><td class="good">통과</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">보정 전은 고장 시드 1개, 보정 후는 6개 평균입니다. 12시간은 시드 1 검증으로 골랐습니다. 보정은 결과를 본 뒤의 변경이며 <code>docs/eda06_preregistration.md</code>에 이유와 함께 적었습니다. 왕복 12시간이 넘는 재방문과 다른 장비군을 거쳐 오는 lot은 여전히 고정 도착입니다.</p>
+</section>
+
+<section>
+  <h2>선행 연구와의 관계</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>연구</th><th>한 것</th><th>우리와 다른 점</th><th>확인 수준</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://doi.org/10.1016/j.cie.2025.111620">Wang 외 2026</a></td><td>실제 파운드리 implant, 장비 배정, 셋업·폐기 보상</td><td>일부러 기다리기 없음, 데이터 비공개, 고장 제외</td><td>본문</td></tr>
+      <tr><td><a href="https://informs-sim.org/wsc24papers/con246.pdf">Norman 외 2024</a></td><td>implant 대기 파라미터를 RL로 조정, 튜닝 상수와 비교</td><td>대기 목적이 고수율 장비 활용, 상용 모델, 공장 영향 미측정</td><td>본문</td></tr>
+      <tr><td>Kovács 외 2023</td><td>SMT2020 전체를 GP로, implant 규칙이 셋업을 중시</td><td>implant 단독 효과와 일부러 기다리기 없음. 새 규칙과 비슷한 형태가 탐색 범위에 있었는지는 미확인</td><td>박사논문 해당 장</td></tr>
+      <tr><td><a href="https://arxiv.org/abs/2005.08840">Hu, Dong, Perry 2022</a></td><td>전환 비용이 큰 polling 시스템의 단순 규칙 최적성</td><td>RL 아님, 장비군 조건에 맞는지 미확인</td><td>검색 요약</td></tr>
+    </tbody>
+  </table></div>
+  <p>새 규칙은 장비 수 대비 대기열을 보는 평범한 형태라, 비슷한 규칙이 이미 있을 수 있습니다. 논문에 "새로운 규칙"으로 쓰기 전에 선행 규칙을 찾아봐야 합니다.</p>
+</section>
+
+<section>
+  <h2>다음 단계</h2>
+  <ol style="margin:0;padding-left:20px;display:grid;gap:6px;max-width:68ch">
+    <li><strong>공장 검증 시드 늘리기.</strong> 새 규칙과 기본 규칙을 시드 10개 이상으로 돌려 CT 차이의 신뢰구간을 좁힙니다.</li>
+    <li><strong>RL 시도.</strong> 재생 환경에서 학습하고, 새 규칙과 미래를 모르는 계획을 기준선으로 비교합니다. 왜 계획이 아니라 RL인지는 빠른 추론과 시뮬레이터 없는 실행으로 답할 후보입니다.</li>
+    <li><strong>일반화 확인.</strong> LVHM(장비 11, 7, 7대, 제품 10종)과 교체 시간, 최소 연속 처리, 가스 수의 민감도를 잽니다.</li>
+    <li><strong>새 규칙 선행 조사.</strong> polling과 병렬 서버 전환 문헌을 찾습니다.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>한계</h2>
+  <ul>
+    <li>SMT2020은 합성 테스트베드입니다. 결과는 "이 시뮬레이션에서"까지만 말할 수 있고, 실제 공장 개선을 뜻하지 않습니다.</li>
+    <li>HVLM, FIFO, 배치 Demand 조건만 시험했습니다.</li>
+    <li>공장 검증의 파라미터는 보정 전 환경의 튜닝값(128: 5/240, 132: 3/240, 91: 5/480)입니다.</li>
+    <li>가스 교체의 재료비, 품질 영향, 작업자 제약은 모델에 없습니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>파일</h2>
+  <ul>
+    <li><code>docs/eda06_preregistration.md</code> 사전 기준과 결과 뒤의 변경</li>
+    <li><code>src/implant_env.py</code> 도착 기록 재생 환경</li>
+    <li><code>experiments/run_implant_replay.py</code>, <code>run_implant_confirm.py</code>, <code>run_all_implant_cov.sh</code> 실험 실행</li>
+    <li><code>results/eda06_fb/</code> 보정 환경 결과, <code>results/eda06/</code> 보정 전 결과</li>
+    <li><code>results/implant_setup/SMT2020_HVLM_fifo_cov_Demand_730d_s*/</code> 공장 전체 결과</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>
