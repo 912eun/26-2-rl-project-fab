@@ -11,6 +11,7 @@
 - 저장 형식: SB3 정책 가중치를 우리 ActorCritic 형식으로 옮겨 results/rl_ppo/ppo_up_lt<suffix>_s<seed>.pt 로 저장한다.
   그래서 evaluate.py(--kind ppo --stoch), select_e1.py, pick_policy.py, 공장 RL 모드를 그대로 쓴다.
   SB3 원본 모델도 *_sb3.zip으로 남긴다.
+- 학습 기록(log)에 반복마다 엔트로피, KL(approx_kl), clip fraction, value loss 등 SB3 학습 지표를 남긴다(2026-11-20 추가, 학습 결과는 그대로).
 - 알려진 근사: 14일 구간 끝(truncated)에서 SB3가 다음 가치를 이어 붙일 때는 고정 γ(γ_h^(대표 간격))를 쓴다. 에피소드당 1번.
 
 실행: python3 experiments/ppo_sb3.py --iters 300 --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --wait_min <W> --suffix _<태그> --seed <s>
@@ -114,6 +115,13 @@ class TrainCallback(BaseCallback):
             self.model.ent_coef = a.ent + (a.ent_end - a.ent) * min(self.it / max(D - 1, 1), 1.0)
         row = dict(it=self.it, sim_days=self.sim_h / 24, mean_r=self.r_sum / max(self.n, 1),
                    wait_share=self.waits / max(self.n, 1), sec=time.time() - self.t0)
+        # 디버깅 지표(10장 24쪽): SB3가 직전 train()에서 기록한 값. 이 시점에는 아직 dump 전이라 남아 있다(첫 회는 없음).
+        nv = self.model.logger.name_to_value
+        for k in ("entropy_loss", "approx_kl", "clip_fraction", "value_loss", "policy_gradient_loss", "explained_variance"):
+            if f"train/{k}" in nv:
+                row[k] = float(nv[f"train/{k}"])
+        if "entropy_loss" in row:
+            row["entropy"] = -row["entropy_loss"]  # SB3는 −평균 엔트로피를 기록한다
         self.r_sum = self.n = self.waits = 0
         if (self.it + 1) % a.val_every == 0 or self.it == a.iters - 1:
             net = C.ActorCritic()
