@@ -1,0 +1,52 @@
+{
+ "mode": "covfb",
+ "hold_min": null,
+ "hold": {
+  "holds": 133402,
+  "kept_gas": 122902,
+  "expired_switch": 10500,
+  "hot_skipped": 0,
+  "rl_calls": 0,
+  "rl_wait": 0,
+  "rl_switch": 0
+ },
+ "lot_waiting_at_machine": {
+  "Implant_128": [
+   333900,
+   1266243032.9840944
+  ],
+  "Implant_132": [
+   229554,
+   932584874.9801403
+  ],
+  "Implant_91": [
+   166977,
+   1157149911.2739244
+  ]
+ },
+ "family_time": {
+  "Implant_128": {
+   "n": 10,
+   "utilized_s": 185468872.5,
+   "setup_s": 19772640,
+   "pm_s": 43911074.524469376,
+   "br_s": 16481786.14154138
+  },
+  "Implant_132": {
+   "n": 8,
+   "utilized_s": 155094027.75,
+   "setup_s": 14580000,
+   "pm_s": 35538214.12051989,
+   "br_s": 12527470.541571625
+  },
+  "Implant_91": {
+   "n": 6,
+   "utilized_s": 105131202.75,
+   "setup_s": 12830400,
+   "pm_s": 26820480.365641102,
+   "br_s": 9764821.528727734
+  }
+ },
+ "done_lots": 41691,
+ "active_lots": 2269
+}
