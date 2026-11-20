@@ -1,0 +1,193 @@
+[SMT2020_HVLM rl] day    0.0/730  elapsed    0.0 min  ETA    nan min
+[SMT2020_HVLM rl] day   10.0/730  elapsed    1.3 min  ETA   90.2 min
+[SMT2020_HVLM rl] day   20.0/730  elapsed    2.7 min  ETA   96.8 min
+[SMT2020_HVLM rl] day   30.0/730  elapsed    4.3 min  ETA   99.6 min
+[SMT2020_HVLM rl] day   40.0/730  elapsed    5.8 min  ETA  100.3 min
+[SMT2020_HVLM rl] day   50.0/730  elapsed    7.6 min  ETA  102.8 min
+[SMT2020_HVLM rl] day   60.0/730  elapsed    9.3 min  ETA  104.1 min
+[SMT2020_HVLM rl] day   70.0/730  elapsed   11.1 min  ETA  104.8 min
+[SMT2020_HVLM rl] day   80.0/730  elapsed   12.9 min  ETA  105.2 min
+[SMT2020_HVLM rl] day   90.0/730  elapsed   14.8 min  ETA  105.4 min
+[SMT2020_HVLM rl] day  100.0/730  elapsed   16.6 min  ETA  104.8 min
+[SMT2020_HVLM rl] day  110.0/730  elapsed   18.5 min  ETA  104.0 min
+[SMT2020_HVLM rl] day  120.0/730  elapsed   20.3 min  ETA  103.1 min
+[SMT2020_HVLM rl] day  130.0/730  elapsed   22.1 min  ETA  102.0 min
+[SMT2020_HVLM rl] day  140.0/730  elapsed   23.9 min  ETA  100.5 min
+[SMT2020_HVLM rl] day  150.0/730  elapsed   25.7 min  ETA   99.3 min
+[SMT2020_HVLM rl] day  160.0/730  elapsed   27.4 min  ETA   97.4 min
+[SMT2020_HVLM rl] day  170.0/730  elapsed   29.0 min  ETA   95.4 min
+[SMT2020_HVLM rl] day  180.0/730  elapsed   30.6 min  ETA   93.4 min
+[SMT2020_HVLM rl] day  190.0/730  elapsed   32.2 min  ETA   91.6 min
+[SMT2020_HVLM rl] day  200.0/730  elapsed   33.9 min  ETA   89.8 min
+[SMT2020_HVLM rl] day  210.0/730  elapsed   35.5 min  ETA   88.0 min
+[SMT2020_HVLM rl] day  220.0/730  elapsed   37.2 min  ETA   86.2 min
+[SMT2020_HVLM rl] day  230.0/730  elapsed   38.8 min  ETA   84.4 min
+[SMT2020_HVLM rl] day  240.0/730  elapsed   40.5 min  ETA   82.7 min
+[SMT2020_HVLM rl] day  250.0/730  elapsed   42.2 min  ETA   81.0 min
+[SMT2020_HVLM rl] day  260.0/730  elapsed   43.8 min  ETA   79.3 min
+[SMT2020_HVLM rl] day  270.0/730  elapsed   45.5 min  ETA   77.5 min
+[SMT2020_HVLM rl] day  280.0/730  elapsed   47.1 min  ETA   75.8 min
+[SMT2020_HVLM rl] day  290.0/730  elapsed   48.8 min  ETA   74.0 min
+[SMT2020_HVLM rl] day  300.0/730  elapsed   50.4 min  ETA   72.3 min
+[SMT2020_HVLM rl] day  310.0/730  elapsed   52.1 min  ETA   70.6 min
+[SMT2020_HVLM rl] day  320.0/730  elapsed   53.8 min  ETA   68.9 min
+[SMT2020_HVLM rl] day  330.0/730  elapsed   55.4 min  ETA   67.2 min
+[SMT2020_HVLM rl] day  340.0/730  elapsed   57.1 min  ETA   65.5 min
+[SMT2020_HVLM rl] day  350.0/730  elapsed   58.7 min  ETA   63.7 min
+[SMT2020_HVLM rl] day  360.0/730  elapsed   60.4 min  ETA   62.0 min
+[SMT2020_HVLM rl] day  370.0/730  elapsed   62.0 min  ETA   60.4 min
+[SMT2020_HVLM rl] day  380.0/730  elapsed   63.7 min  ETA   58.7 min
+[SMT2020_HVLM rl] day  390.0/730  elapsed   65.4 min  ETA   57.0 min
+[SMT2020_HVLM rl] day  400.0/730  elapsed   67.0 min  ETA   55.3 min
+[SMT2020_HVLM rl] day  410.0/730  elapsed   68.6 min  ETA   53.6 min
+[SMT2020_HVLM rl] day  420.0/730  elapsed   70.3 min  ETA   51.9 min
+[SMT2020_HVLM rl] day  430.0/730  elapsed   71.9 min  ETA   50.2 min
+[SMT2020_HVLM rl] day  440.0/730  elapsed   73.5 min  ETA   48.4 min
+[SMT2020_HVLM rl] day  450.0/730  elapsed   75.1 min  ETA   46.7 min
+[SMT2020_HVLM rl] day  460.0/730  elapsed   76.6 min  ETA   45.0 min
+[SMT2020_HVLM rl] day  470.0/730  elapsed   78.2 min  ETA   43.2 min
+[SMT2020_HVLM rl] day  480.0/730  elapsed   79.8 min  ETA   41.6 min
+[SMT2020_HVLM rl] day  490.0/730  elapsed   81.4 min  ETA   39.9 min
+[SMT2020_HVLM rl] day  500.0/730  elapsed   83.1 min  ETA   38.2 min
+[SMT2020_HVLM rl] day  510.0/730  elapsed   84.8 min  ETA   36.6 min
+[SMT2020_HVLM rl] day  520.0/730  elapsed   86.4 min  ETA   34.9 min
+[SMT2020_HVLM rl] day  530.0/730  elapsed   88.1 min  ETA   33.2 min
+[SMT2020_HVLM rl] day  540.0/730  elapsed   89.8 min  ETA   31.6 min
+[SMT2020_HVLM rl] day  550.0/730  elapsed   91.4 min  ETA   29.9 min
+[SMT2020_HVLM rl] day  560.0/730  elapsed   93.1 min  ETA   28.3 min
+[SMT2020_HVLM rl] day  570.0/730  elapsed   94.8 min  ETA   26.6 min
+[SMT2020_HVLM rl] day  580.0/730  elapsed   96.4 min  ETA   24.9 min
+[SMT2020_HVLM rl] day  590.0/730  elapsed   98.0 min  ETA   23.3 min
+[SMT2020_HVLM rl] day  600.0/730  elapsed   99.8 min  ETA   21.6 min
+[SMT2020_HVLM rl] day  610.0/730  elapsed  101.4 min  ETA   20.0 min
+[SMT2020_HVLM rl] day  620.0/730  elapsed  103.0 min  ETA   18.3 min
+[SMT2020_HVLM rl] day  630.0/730  elapsed  104.6 min  ETA   16.6 min
+[SMT2020_HVLM rl] day  640.0/730  elapsed  106.2 min  ETA   14.9 min
+[SMT2020_HVLM rl] day  650.0/730  elapsed  107.8 min  ETA   13.3 min
+[SMT2020_HVLM rl] day  660.0/730  elapsed  109.4 min  ETA   11.6 min
+[SMT2020_HVLM rl] day  670.0/730  elapsed  111.0 min  ETA    9.9 min
+[SMT2020_HVLM rl] day  680.0/730  elapsed  112.6 min  ETA    8.3 min
+[SMT2020_HVLM rl] day  690.0/730  elapsed  114.3 min  ETA    6.6 min
+[SMT2020_HVLM rl] day  700.0/730  elapsed  116.0 min  ETA    5.0 min
+[SMT2020_HVLM rl] day  710.0/730  elapsed  117.6 min  ETA    3.3 min
+[SMT2020_HVLM rl] day  720.0/730  elapsed  119.2 min  ETA    1.7 min
+[SMT2020_HVLM rl] day  730.0/730  elapsed  121.0 min  ETA   -0.0 min
+Konnte Datei nicht speichern: data/horse/ws/dahe839f-WsHeik/PcSCFabSim/debug_data_greedy_seed4_rl_Demand_730days_SMT2020_HVLM_fifo.pkl
+SUM_CQT_VIOLATIONS: 0
+Lot APT DL ACT TH ONTIME tardiness early_tardiness wa wab pr tr late
+HotLot_3 24.7 33.3 31.7 498 93.25 1255455.948507905 35161364.97194642 3.204246219228333 1.1397837043860424 24.6921140452328 2.493569047404689 16
+HotLot_4 14.5 19.6 18.5 509 91.5 1708388.2452423498 25125787.34246634 1.6445750959905665 0.6318661560314575 14.480881635616386 1.5060152772921465 21
+Lot_3 24.7 53.8 49.9 18849 97.28 18528711.17877312 2973155809.790086 21.86321387250014 1.5073173563017281 24.68419530203306 2.4916090969609526 236
+Lot_4 14.5 30.3 27.7 19569 96.12 25687553.28286676 2113406199.9771466 11.195636025143287 0.7247223083307331 14.487961052924163 1.507076198621102 365
+---------------
+31.94 9856.25 94.5375
+127.77 39425 378.15
+---------------
+Machine Cnt avail util br pm setup
+DE_BE_11 10 88.46 86.69 2.28 9.26 0.0
+DE_BE_12 9 88.65 84.97 2.17 9.18 0.0
+DE_BE_13 21 88.5 84.76 2.38 9.11 1.58
+DE_BE_48 10 88.73 89.41 2.16 9.11 0.0
+DE_BE_50 9 88.85 82.33 2.11 9.04 0.0
+DE_BE_65 17 88.86 85.67 2.13 9.01 0.0
+DE_BE_66 19 88.72 85.23 2.27 9.02 1.98
+DE_BE_67 10 88.43 88.27 2.49 9.07 0.0
+DE_BE_69 2 88.72 75.79 2.08 9.2 0.0
+DE_FE_1 7 88.66 87.77 2.13 9.2 0.0
+DE_FE_51 19 88.64 87.55 2.26 9.1 0.0
+DE_FE_53 5 88.73 74.27 2.28 8.99 0.0
+DE_FE_54 5 88.41 89.58 2.39 9.21 0.0
+DE_FE_56 2 88.38 82.3 2.44 9.17 0.0
+DE_FE_58 3 88.79 67.3 1.96 9.25 0.0
+DE_FE_59 15 88.68 90.79 2.09 9.22 0.0
+DE_FE_62 14 88.5 88.49 2.35 9.15 0.0
+DE_FE_70 13 88.55 88.94 2.28 9.17 0.0
+DE_FE_71 28 88.75 88.37 2.16 9.09 0.0
+DE_FE_72 9 88.92 90.83 1.98 9.09 0.0
+DE_FE_86 135 88.57 89.48 2.24 9.19 0.0
+DefMEt_FE_118 2 96.46 73.14 0.41 3.14 0.0
+DefMet_BE_33 2 96.51 22.89 0.33 3.16 0.0
+DefMet_BE_42 1 96.47 40.75 0.4 3.13 0.0
+DefMet_FE_10 2 96.48 83.19 0.34 3.18 0.0
+DefMet_FE_106 1 96.51 3.73 0.38 3.11 0.0
+DefMet_FE_34 2 96.37 62.53 0.32 3.3 0.0
+DefMet_FE_43 6 96.45 80.09 0.36 3.19 0.0
+Delay_32 400 100.0 29.08 0.0 0.0 0.0
+Dielectric_BE_20 5 80.81 84.28 5.37 13.82 0.0
+Dielectric_BE_21 8 80.37 86.73 5.87 13.76 0.0
+Dielectric_BE_27 15 80.31 83.97 5.85 13.84 0.0
+Dielectric_BE_28 4 80.36 81.16 5.96 13.67 0.0
+Dielectric_BE_60 4 80.42 79.23 5.62 13.97 0.0
+Dielectric_FE_112 10 80.69 89.18 5.28 14.03 0.0
+Dielectric_FE_130 4 79.73 86.69 6.18 14.08 0.0
+Dielectric_FE_29 3 79.83 79.88 6.19 13.98 0.0
+Dielectric_FE_30 2 80.86 73.73 5.0 14.15 0.0
+Dielectric_FE_31 4 79.93 83.32 6.12 13.95 0.0
+Diffusion_BE_123 12 92.62 87.61 1.35 6.03 0.0
+Diffusion_FE_100 2 92.56 77.21 1.59 5.85 0.0
+Diffusion_FE_101 7 92.55 89.95 1.38 6.07 0.0
+Diffusion_FE_120 11 92.35 87.18 1.63 6.02 0.0
+Diffusion_FE_122 5 92.54 87.35 1.41 6.04 0.0
+Diffusion_FE_125 4 92.56 77.47 1.4 6.03 0.0
+Diffusion_FE_126 3 92.57 76.2 1.4 6.03 0.0
+Diffusion_FE_127 9 92.46 84.04 1.5 6.05 0.0
+Diffusion_FE_44 11 92.51 86.37 1.43 6.06 0.0
+Diffusion_FE_94 11 92.43 85.43 1.54 6.03 0.0
+EPI_36 2 79.87 20.23 6.13 13.99 0.0
+EPI_38 1 81.09 48.54 5.46 13.46 0.0
+Implant_119 2 80.85 50.73 4.99 14.16 9.24
+Implant_128 10 80.43 72.96 5.54 14.03 6.61
+Implant_132 8 80.3 76.51 5.59 14.12 5.41
+Implant_74 2 78.55 19.44 7.42 14.03 0.0
+Implant_88 2 81.6 39.33 4.15 14.25 0.0
+Implant_90 2 80.79 58.33 5.02 14.18 8.37
+Implant_91 6 80.86 68.6 5.2 13.93 7.23
+LithoMet_BE_18 13 96.46 90.98 0.34 3.2 0.0
+LithoMet_FE_19 18 96.5 91.01 0.34 3.16 0.0
+LithoTrack_BE_117 5 84.94 90.2 7.97 7.1 0.0
+LithoTrack_FE_115 51 86.7 89.13 6.27 7.03 4.55
+LithoTrack_FE_95 49 86.24 84.08 6.76 7.01 8.43
+LithoTrack_FE_96 2 87.15 53.81 5.86 6.99 0.0
+Litho_BE_110 28 86.33 96.8 6.66 7.02 0.0
+Litho_BE_93 3 87.32 76.81 5.73 6.96 0.0
+Litho_BE_99 3 86.92 92.11 6.05 7.02 0.0
+Litho_FE_111 22 86.21 95.34 6.78 7.01 0.0
+Litho_FE_35 2 87.0 59.94 6.01 6.99 0.0
+Litho_FE_92 33 86.42 95.47 6.55 7.02 0.0
+Litho_FE_98 5 86.35 95.76 6.63 7.01 0.0
+Litho_REG_BE_63 8 96.55 88.62 0.29 3.15 0.0
+Litho_REG_FE_64 14 96.51 87.73 0.32 3.17 0.0
+Planar_BE_75 20 80.01 69.04 2.05 17.94 0.0
+Planar_FE_76 3 80.14 64.19 1.89 17.98 0.0
+Planar_FE_77 2 80.43 74.25 1.78 17.79 0.0
+Planar_FE_78 2 80.43 43.5 2.09 17.47 0.0
+Planar_FE_79 5 79.66 75.79 2.09 18.25 0.0
+Planar_FE_80 2 80.47 33.01 1.88 17.65 0.0
+TF_BE_2 4 84.98 62.87 4.54 10.49 0.0
+TF_BE_23 19 85.29 81.98 4.31 10.4 0.0
+TF_BE_24 5 85.14 68.44 4.6 10.26 0.0
+TF_BE_26 15 85.3 78.83 4.27 10.44 0.0
+TF_BE_40 24 85.14 79.64 4.49 10.37 0.0
+TF_FE_103 4 85.69 85.38 3.72 10.59 0.0
+TF_FE_104 5 85.42 81.61 4.19 10.39 0.0
+TF_FE_113 2 84.68 78.07 4.83 10.49 0.0
+TF_FE_131 6 85.06 82.88 4.25 10.69 0.0
+TF_FE_3 2 85.93 78.99 3.87 10.2 0.0
+TF_FE_5 4 85.14 63.76 4.36 10.5 0.0
+TF_Met_FE_45 2 96.48 17.08 0.34 3.17 0.0
+TF_Met_FE_61 2 96.38 74.76 0.45 3.16 0.0
+WE_BE_14 5 89.04 73.45 2.28 8.68 0.0
+WE_BE_16 9 89.1 83.61 2.15 8.75 0.0
+WE_BE_17 2 89.33 80.01 1.96 8.71 0.0
+WE_BE_7 1 90.2 28.18 1.49 8.31 0.0
+WE_BE_81 3 89.19 67.48 2.34 8.47 0.0
+WE_BE_82 10 89.24 83.55 2.13 8.63 0.0
+WE_BE_9 7 89.18 81.01 2.07 8.74 0.0
+WE_FE_108 35 89.06 85.15 2.19 8.75 0.0
+WE_FE_41 5 88.89 83.49 2.34 8.77 0.0
+WE_FE_47 6 89.11 76.16 2.1 8.79 0.0
+WE_FE_8 2 89.03 78.43 2.17 8.8 0.0
+WE_FE_83 7 89.06 85.22 2.11 8.83 0.0
+WE_FE_84 18 88.96 85.47 2.25 8.79 0.0
+WE_FE_85 2 89.0 64.39 2.47 8.54 0.0
+done rl in 121.0 min -> /Users/sye/서강대/26-2/강개론/project/results/implant_setup/SMT2020_HVLM_fifo_rl_dqn_up_e3_s11_Demand_730d_s4
