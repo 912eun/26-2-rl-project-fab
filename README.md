@@ -2,8 +2,6 @@
 
 반도체 이온 주입 공정에서 현재 가스의 작업을 기다릴지, 다른 가스로 교체할지 결정하는 강화학습 프로젝트입니다. 공장 기록으로 보정한 재생 환경에 29차원 상태·3개 행동과 시간 기준 보상을 구성하고 DQN·PPO를 비교했습니다. 분리된 시험 조건에서 DQN은 압력 규칙 `cov` 대비 전체 지연을 평균 13.0% 줄였습니다. 전체 공장 재검증에서도 implant 대기는 감소했으나 공장 CT·처리량의 뚜렷한 개선까지 확인한 것은 아닙니다.
 
-강화학습개론 팀 프로젝트 · Python · Double DQN · MaskablePPO · 이산사건 시뮬레이션
-
 [실험 설계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/EXPERIMENT_PLAN.md) · [실험 결과·한계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md) · [공정 인터랙티브 설명](https://claude.ai/artifact/8D2UrQMXGViHDASqqgaEtV)
 
 [공장 풀가동!](https://github.com/912eun/insicon-ai-mcs)의 AMR 운반·충전 제어에 이어, 장비의 가스 교체 시점과 결정 간격이 불규칙한 환경의 학습을 다룬 후속 프로젝트입니다.
