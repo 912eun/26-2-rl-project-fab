@@ -1,152 +1,170 @@
-# 반도체 fab implant 가스 교체 RL (강화학습개론 2026-2)
+# Fab 가스 교체 최적화
 
-SMT2020 공장 시뮬레이터(PySCFabSim-revised)에서 **implant 장비군 하나만 떼어 낸 작은 환경**을 만들고,
-거기서 "장비가 비었을 때 다른 가스로 교체할지, 기다릴지"를 강화학습으로 배운 뒤, 배운 정책을 공장 전체에 다시 넣어 확인한다.
+반도체 이온 주입 공정에서 **현재 가스의 작업을 기다릴지, 다른 가스로 교체할지** 결정하는 강화학습 프로젝트입니다. 공장 기록으로 보정한 재생 환경에 29차원 상태·3개 행동과 시간 기준 보상을 구성하고 DQN·PPO를 비교했습니다. 분리된 시험 조건에서 DQN은 압력 규칙 `cov` 대비 전체 지연을 평균 13.0% 줄였습니다. 전체 공장 재검증에서도 implant 대기는 감소했으나 공장 CT·처리량의 뚜렷한 개선까지 확인한 것은 아닙니다.
 
-**실험을 돌리기 전에 [`docs/EXPERIMENT_PLAN.md`](docs/EXPERIMENT_PLAN.md)(데이터 나누기, 실험 목록과 시드 수, 최종 평가 지표, 명령, 협업 규칙)를 먼저 읽는다.**
+강화학습개론 팀 프로젝트 · Python · Double DQN · MaskablePPO · 이산사건 시뮬레이션
 
-## 팀 결정 (3차 회의)
+[실험 설계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/EXPERIMENT_PLAN.md) · [실험 결과·한계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md) · [공정 인터랙티브 설명](https://claude.ai/artifact/8D2UrQMXGViHDASqqgaEtV)
 
-- 주제: implant 가스 교체 RL
-- 알고리즘: DQN, PPO (직접 구현). SB3 사용 가능 여부는 교수님께 문의 중
-- 환경: 공장 데이터(도착 기록) 기준으로 가져오고, 작은 환경과 공장의 오차를 보정한다 → [오차 보정](#오차-보정-calibration)
-- 기다리기 행동: 사건마다 다시 묻기보다 **정해진 시간만큼 기다리기**가 나았다 → `--wait_min` 옵션
-- 비교 기준(baseline): **압력 규칙(cov)** → [비교 기준](#비교-기준-baseline)
+[공장 풀가동!](https://github.com/912eun/insicon-ai-mcs)의 AMR 운반·충전 제어에 이어, 장비의 가스 교체 시점과 결정 간격이 불규칙한 환경의 학습을 다룬 후속 프로젝트입니다.
 
-## 빠른 시작
+> 아래 결과와 실행 안내는 `develop` 브랜치의 E3·E6 실험 기준입니다. 코드를 실행할 때도 `develop`을 사용합니다.
+
+## 01. 문제
+
+이온 주입 장비는 가스를 교체하는 동안 생산할 수 없습니다. 현재 가스의 대기 작업이 없을 때 즉시 교체하면 곧 도착할 같은 가스 작업 때문에 다시 교체할 수 있고, 너무 오래 기다리면 다른 작업의 지연이 누적됩니다.
+
+| 장비군 | 장비 수 | 가스 교체 시간 |
+|---|---:|---:|
+| Implant_128 | 10대 | 72분 |
+| Implant_132 | 8대 | 60분 |
+| Implant_91 | 6대 | 80분 |
+
+최소 연속 처리량, 정비(PM), 고장, 긴급 작업을 반영합니다. RL은 장비가 비었고 현재 가스의 작업은 없지만 다른 가스의 작업이 있는 순간에 개입합니다. 긴급 작업이나 정비 후 가스가 해제된 상태는 기준 규칙으로 처리합니다.
+
+## 02. 학습·검증 구조
+
+![Fab 재생 환경 학습과 분리된 시험·전체 공장 검증](docs/images/fab-architecture.svg)
+
+작은 환경에서는 같은 도착 기록을 반복 사용해 정책을 비교합니다. 공장과 대기·교체 횟수·가동률·상태 분포를 대조하고, 규칙을 바꿨을 때 결과가 같은 방향으로 움직이는지도 확인했습니다. 여러 장비군을 동시에 제어하면 공정 간 도착 흐름이 바뀌므로, 재생 환경의 결과만으로 결론을 내리지 않고 공장 전체 검증을 추가했습니다.
+
+### 상태 S · 행동 A · 보상 R
+
+![Fab 정책 호출 조건, 상태·행동·보상과 시간 기준 학습](docs/images/fab-policy.svg)
+
+| 항목 | 설계 |
+|---|---|
+| **S — 29차원** | 장비군 크기·교체 시간, 대기·PM 잔여량, 가스별 다른 장비 상태·대기 작업·긴급 작업·도착 정보 및 앞 공정 6개 변수 |
+| **A — Discrete(3)** | `0`: 기다리기 / `1`: 다른 가스 1 / `2`: 다른 가스 2. 대기 작업이 없는 가스는 마스킹 |
+| **R — 누적 비용 변화** | 대기 작업 수 × 경과 시간의 적분 + 발생한 교체 시간. 장비 수와 시간 단위로 정규화한 음의 보상 |
+| 시간 처리 | 결정 사이 경과 시간에 따라 할인·다단계 목표 적용 |
+| 최종 기다리기 길이 | 검증 비교를 통해 40분 선택 |
+
+$$
+C(\tau)=\int_0^\tau N_{\mathrm{queue}}(u)\,du + \sum_{k:\tau_k\leq\tau} T_{\mathrm{setup},k},
+\qquad r_t=-\frac{C(\tau_{t+1})-C(\tau_t)}{3600M}
+$$
+
+`M`은 장비군의 장비 수입니다. 대기 적분과 교체 시간은 초 단위로 누적하고 3,600으로 나눠 시간 단위로 맞춥니다. 두 알고리즘 모두 학습에는 보상 `×0.1`을 사용합니다. 결정 간격이 일정하지 않으므로 할인은 `γₜ = 0.9^Δt(h)`, PPO의 GAE는 `λₜ = 0.95^Δt(h)`로 계산합니다.
+
+### 네트워크 계층
+
+![Fab Double DQN의 online·target 네트워크와 PPO의 분리된 Actor·Critic](docs/images/fab-network.svg)
+
+### 하이퍼파라미터
+
+| 항목 | DQN | PPO |
+|---|---|---|
+| 네트워크 | `29 → 64 → 64 → 3`, Tanh | Actor `29 → 64 → 64 → 3`, Critic `29 → 64 → 64 → 1`, Tanh |
+| 학습률 | `1e-4` 고정 | `3e-4`, 600 rollout에 걸쳐 감소·하한 10% |
+| 환경 수 / mini-batch | 8 / 256 | 8 / 256 |
+| 학습 상한 | 1,200,000 환경 step | 1,000 rollout, 환경당 256 step |
+| 업데이트 | 환경 4 step마다 1회 | rollout당 4 epoch |
+| Replay / 초기 수집 | 200,000 / 10,000 step | 해당 없음 |
+| Target network | 2,000 gradient update마다 복사 | 해당 없음 |
+| 탐색 | ε 1 → 0.05, 360,000 step; 교체 탐색률 0.6/시간 | 초기 교체율 0.3/시간, entropy 0.003 → 0 |
+| 장기 보상 | 시간 기준 n-step 0.5h | 시간 기준 GAE λ=0.95/시간 |
+| 손실·제약 | Smooth L1, gradient clip 10 | PPO clip 0.2, value 계수 0.5, gradient clip 0.5 |
+| 조기 종료 | 최종 설정은 사용 안 함 | 최소 600 rollout 이후 patience 15, min_delta 0.01 |
+| 공통 | 기다리기 40분, γ=0.9/시간, 학습 시드 10~19 | 동일 |
+
+최종 설정은 [E3 실험 기록](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md)과 학습 스크립트 기준입니다. 초기 v4 결과와 최종 E3 설정을 구분합니다.
+
+기준선 `cov`는 **가스별 대기량 ÷ 해당 가스 담당 장비 수**를 이용한 압력 규칙입니다. 단순 즉시 교체 규칙뿐 아니라 이 강한 기준선과 비교했습니다.
+
+## 03. 실험 결과
+
+![재생 환경에서 cov 대비 전체 지연 변화와 95% 구간](docs/images/fab-results.svg)
+
+*E3: 설정 조정에 쓰지 않은 학습 시드 10~19의 평균. 시험은 기록 시드 2·3 × 고장 시드 1~5 조건이며, 음수일수록 지연이 감소했습니다.*
+
+| 알고리즘 | cov 대비 전체 지연 변화 | 95% 구간 |
+|---|---:|---:|
+| DQN | −13.0% | [−14.5%, −11.5%] |
+| PPO | −5.7% | [−8.0%, −3.3%] |
+
+검증 점수 평균은 DQN 0.810, PPO 0.883으로 DQN이 우세해 주 알고리즘으로 선택했습니다. 선택 규칙은 시험 결과가 나온 뒤 문서화되었으며, 실제 선택에는 검증 점수를 사용했다는 절차상의 한계를 함께 기록했습니다.
+
+### 전체 공장 검증
+
+E6는 검증 점수로 고른 DQN 정책을 공장 시드 4·5·6에 적용하고, 730일 실행 중 두 번째 해의 통계를 비교한 실험입니다.
+
+| 세 장비군 동시 적용 | 시드 4 | 시드 5 | 시드 6 |
+|---|---:|---:|---:|
+| implant 전체 대기 변화 | −13.1% | −16.3% | −10.3% |
+
+**implant 대기는 줄었지만 공장 전체 생산성의 뚜렷한 개선까지 확인한 것은 아닙니다.** DQN의 공장 CT 차이는 평균 −0.08일로 시드 간 변동 약 0.45일보다 작았고, 처리량 차이는 ±0.8% 이내였습니다. 장비군을 하나씩 제어하는 조건에서는 다른 장비군의 대기가 늘어나는 경우도 있었습니다.
+
+PPO의 공장 검증은 보조 결과입니다. 검증으로 선택된 PPO 정책이 시험 성능에서도 10개 중 가장 좋았기 때문에 전체 PPO 평균보다 낙관적일 수 있습니다. 상세 표는 [진행 기록](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md)에 있습니다.
+
+## 04. 시행착오
+
+| 문제 | 확인한 원인 | 반영 |
+|---|---|---|
+| 교체가 과도하게 발생 | 결정 횟수에 비례한 탐색이 실제 경과 시간을 반영하지 못함 | 시간 기준 탐색·할인·다단계 목표 |
+| 기다리기로 정책 붕괴 | 드문 교체의 장기 효과를 학습하기 어려움 | 다단계 목표와 기다리기 길이 비교 |
+| 재생·공장 지표 차이 | 고장 난수와 공정 간 피드백 영향 | 같은 고장 기록으로 보정, 공장 재검증 |
+| 장시간 학습 중 메모리 증가 | 반복 검증 프로세스의 메모리 누적 | 검증 작업 단위로 프로세스 재생성 |
+
+## 05. 실행
 
 ```bash
+git clone --branch develop https://github.com/912eun/26-2-rl-project-fab.git
+cd 26-2-rl-project-fab
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 1) 비교 기준 규칙 (작은 환경, 몇 분)
+# 저장된 도착 기록으로 기준선과 환경 재현성 확인
 python3 baselines/run_baselines.py
-
-# 2) 작은 환경이 공장을 얼마나 재현하나 (오차 보정 기준표, 몇 분)
 python3 calibration/check_fidelity.py
+```
 
-# 3) RL 학습 + 검증 + 시험 (한 번에 10~20분)
-#    (실험 규칙·태그·시드 수는 docs/EXPERIMENT_PLAN.md. 아래는 기본 설정, --wait_min 0 = 다음 사건까지)
-python3 experiments/dqn_implant.py --steps 600000 --nstep_h 0.5 --explore_rate_h 0.6 --wait_min 0 --suffix _try --seed 0
-python3 experiments/ppo_sb3.py --iters 300 --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 --wait_min 0 --suffix _try --seed 0   # SB3 MaskablePPO
+최종 설정으로 DQN·PPO의 학습 시드 10~19를 재현하는 명령입니다. 실행 시간이 길며, 설정 선택에 사용한 시드 0~4와 분리합니다.
 
-# 4) 공장 전체 시뮬레이터가 필요할 때만 (2년 1회에 1.5시간 이상)
+```bash
+for seed in {10..19}; do
+  python3 experiments/dqn_implant.py \
+    --steps 1200000 --eps_steps 360000 \
+    --nstep_h 0.5 --explore_rate_h 0.6 \
+    --wait_min 40 --suffix _e3 --seed "$seed"
+done
+
+for seed in {10..19}; do
+  python3 experiments/ppo_sb3.py \
+    --iters 1000 --decay_iters 600 --lr_floor 0.1 \
+    --min_iters 600 --patience 15 --min_delta 0.01 \
+    --wait_init_rate_h 0.3 --ent 0.003 --ent_end 0 \
+    --wait_min 40 --suffix _e3 --seed "$seed"
+done
+
+# 설정 선택에 쓰지 않은 시험 기록에서 평가
+python3 experiments/evaluate.py --kind dqn --wait_min 40 \
+  --models "results/rl_dqn/dqn_up_e3_s1?.pt"
+python3 experiments/evaluate.py --kind ppo --stoch --wait_min 40 \
+  --models "results/rl_ppo/ppo_up_lt_e3_s1?.pt"
+python3 experiments/analyze.py
+```
+
+전체 공장 실행은 별도 시뮬레이터 설치와 긴 실행 시간이 필요합니다. 팀 실험의 설정·평가 순서는 [실험 안내서](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/EXPERIMENT_PLAN.md)를 따릅니다.
+
+```bash
 ./setup_simulator.sh
-python3 experiments/run_implant_setup.py --mode cov --cov_fb --days 730 --seed 4
+PATTERN=_e3 ALGS="dqn ppo" WAIT_MIN=40 SCOPE=both \
+  bash experiments/run_fab_final.sh
 ```
 
-1~3은 레포에 들어 있는 도착 기록(`data/records`)만으로 돌아간다. 시뮬레이터는 4에만 필요하다.
+`pick_policy.py`가 검증 점수로 각 알고리즘의 정책을 고릅니다. E3는 `results/rl_dqn/`, `results/rl_ppo/`, 공장 검증은 `results/implant_setup/`에 결과를 남깁니다. 보고된 실행에서는 DQN s11·PPO s12가 선택되었으며, 재학습 결과에 따라 선택 시드는 달라질 수 있습니다.
 
-## 폴더 구조
+## 06. 코드와 출처
 
-```
-src/                    작은 환경
-  implant_env.py          도착 기록 재생 이산사건 시뮬레이터, 규칙(lssu, hold, cov=thr(cov=True), rollout)
-  implant_gym.py          gymnasium 감싸기: 결정 시점, 상태 29개, 행동 마스크, 보상, 기다리기 옵션(wait_min)
-  implant_state.py        상태 계산 (작은 환경과 공장이 같은 함수를 쓴다)
-baselines/
-  run_baselines.py        lssu / hold / cov 를 시험 조건에서 평가
-calibration/
-  check_fidelity.py       작은 환경 vs 공장 재현 지표 ①② (오차 보정 기준표)
-experiments/
-  rl_common.py            망, 검증(체크포인트 고르기), 시험, argmax/확률 행동
-  dqn_implant.py          직접 구현 Double DQN (+ 시간 기준 다단계 목표 --nstep_h)
-  ppo_sb3.py              PPO = SB3 MaskablePPO + 시간 기준 GAE·탐색 기준점·우리 검증 (E1부터 사용)
-  ppo_implant.py          직접 구현 PPO (v4 결과 재현용)
-  run_rl_v4.sh            최종 설정으로 PPO·DQN 각 10개(시드 0~4 × 앞 공정 정보 유무)
-  pick_policy.py          검증 점수로 공장에 넣을 정책 고르기
-  run_implant_setup.py    공장 전체 실행 (--mode lssu/hold/cov/rl, --log_events 로 도착 기록 뽑기)
-  run_implant_logs.sh     도착 기록(240일, 시드 1~3) 다시 뽑기
-  run_fab_final.sh        공장 최종 검증 (시드 4~6, 2년)
-  run_implant_replay.py   규칙 튜닝(tune)·시험(test)·rollout 비교 (cov의 Q, Tmax를 여기서 골랐다)
-  check_state.py          상태 분포 비교(재현 지표 ③), 공장 --log_state 결과 필요
-data/
-  records/HVLM_lssu_240d_s{1,2,3}/   공장 도착 기록 (gzip). events_v2.csv, prev_times.csv
-  fab_reference/{규칙}_730d_s{1,2,3}/  공장 2년 실행의 implant 통계 (재현 지표 비교용)
-results/rl_{dqn,ppo}/   최종(v4) 학습 모델(.pt)과 결과(result_*.json)
-docs/                   설계 문서. implant_rl_design.html이 전체 정리(브라우저로 열기)
-```
-
-## 작은 환경
-
-**데이터.** 공장(HVLM, 디스패칭 FIFO, 확산 배치 Demand, implant 기본 규칙 lssu)을 240일 돌리며 implant 3개 장비군에 lot이 도착한 기록을 남겼다(`events_v2.csv`). 작은 환경은 이 도착을 그대로 재생한다.
-
-| 장비군 | 장비 수 | 교체 시간 | 240일 도착 수 (시드 1) |
-|---|---|---|---|
-| Implant_128 | 10 | 72분 | 109,565 |
-| Implant_132 | 8 | 60분 | 75,472 |
-| Implant_91 | 6 | 80분 | 54,799 |
-
-**장비군 안의 규칙은 공장 코드를 옮겼다.** 교체 시간, 최소 7 lot 연속 처리, 처리 매수 기반 PM(가스가 풀림), 지수분포 고장. 왕복 12시간 이하 재방문은 "빨리 처리하면 빨리 돌아오는" 되먹임을 넣으려고 이번 처리 시각에 맞춰 도착시킨다.
-
-**결정 시점.** 장비가 비었고, 지금 가스의 lot이 없고, 다른 가스 lot이 있을 때. 지금 가스 lot이 있으면 무조건 처리한다. hot lot이 있거나 장비에 가스가 없으면(PM·고장 뒤) RL이 아니라 cov가 처리한다.
-
-| | 내용 |
+| 경로 (`develop`) | 내용 |
 |---|---|
-| 상태 s | 29개: 장비군 크기·교체 시간, 기다린 시간, PM까지 남은 양, 다른 장비의 가스별 상태, 가스별 대기 수·hot·가장 오래 기다린 시간, 지난 1시간 도착, 앞 공정 lot 수 6개(`--no_upstream`이면 0) |
-| 행동 a | {기다리기, 다른 가스 1로 교체, 다른 가스 2로 교체}. 대기 lot이 없는 가스는 마스크 |
-| 보상 r | −(대기 lot 수 × 시간 + 교체 시간) ÷ 장비 수. 결정 사이 흐른 시간만큼 할인(γ = 0.9/시간) |
-| 기다리기 | 기본: 다음 사건(도착, 다른 장비 끝 등)에 다시 묻기. `wait_min=10`: 10분 동안 다시 묻지 않기(그사이 지금 가스 lot이 오면 바로 처리) |
+| `src/implant_env.py`, `implant_gym.py`, `implant_state.py` | 재생 환경·상태·행동·보상 |
+| `calibration/` | 공장과 재생 환경의 재현성 비교 |
+| `experiments/dqn_implant.py`, `ppo_sb3.py` | Double DQN·MaskablePPO |
+| `experiments/pick_policy.py`, `run_fab_final.sh` | 검증 정책 선택·공장 검증 |
+| `results/figures/` | E3·E6 결과 그림 |
+| `docs/` | 실험 계획·공정 설명·결과 기록 |
 
-## 오차 보정 (calibration)
-
-두 스크립트가 있다.
-
-- `python3 calibration/diagnose.py --fab_downs`: **같은 시드·같은 기간(60~240일)·같은 기본 규칙(lssu)**으로 공장 기록과 작은 환경을 여러 지표로 비교한다. `--fab_downs`는 고장·PM을 공장 기록(`downs.csv`) 그대로 재생해 입력을 맞춘다. 주간 대기의 짝 차이에 부트스트랩 95% 구간을 붙인다(Kleijnen, Cheng & Bettonvil 2001의 trace-driven 검증 방식).
-- `python3 calibration/check_fidelity.py`: 규칙을 바꿨을 때(hold15, hold30, cov) 공장 2년 실행과 같은 만큼 움직이는지(재현 지표 ②).
-
-현재 값 (2026-11-13, `diagnose.py --fab_downs`, 재생/공장 − 1):
-
-| 지표 | 128 | 132 | 91 |
-|---|---|---|---|
-| 대기 평균 | −2% | −4% | −4% |
-| 주간 대기 짝 차이 [95% 구간] | −2.4% [−9.7, +4.9] | −4.5% [−11.1, +2.1] | −4.5% [−11.5, +2.3] |
-| 대기 중앙값 / 90% | −6% / −1% | −7% / −2% | −1% / −6% |
-| 장비당 하루 교체 수 | 0% | +1% | 0% |
-| 연속 처리 길이 | 0% | −1% | 0% |
-| 가동률(처리+교체) | 0% | 0% | 0% |
-
-- 세 장비군 모두 짝 차이 구간이 0을 포함한다. 남은 차이는 재생이 2~4% 짧게 나오는 쪽으로 일정하다.
-- 재현 지표 ②(규칙 변화의 크기): 9개 조합 모두 순위가 같고 차이 ±1.5%p 안.
-- 이전에 보이던 "132가 +10~13%"는 고장 난수 때문이었다. 고장 하나가 평균 10시간이라, 고장을 난수로 뽑으면 실행 1회 대기가 ±10% 흔들린다(난수로 비교할 때는 `--sims` 10개 이상).
-- 원인이 아니라고 확인한 것: 처리 시간(낱장 연속 처리 장비라 고정값, 기록과 같음), load/unload(공장에서도 장비 시간에서 빠짐), 재방문 연결 기준(12h와 24h가 잡음 안에서 같음).
-- **남은 손볼 곳 후보**
-  - 재생이 일정하게 2~4% 짧은 이유: 고장 장비 대응(공장 장비 번호를 정렬해 0..n−1에 맞춤, 고장 순간 그 장비가 바쁜지가 공장과 다를 수 있음), PM 시각(재생에서 처리한 매수로 정해짐), 동시각 결정 순서.
-  - **다른 implant 장비군을 거쳐 돌아오는 lot**(12시간 안에 128의 18%, 91의 25%)은 기록된 시각에 도착한다. 기본 규칙 보정에는 정확하지만, 세 장비군에 정책을 동시에 넣으면 공장에서는 이 도착도 바뀐다. 공장 검증을 장비군 하나씩 하거나 세 장비군을 한 환경에 묶는 것이 다음 후보.
-  - 더 줄이려면 EPT(유효 처리 시간, Jacobs·Etman·Rooda) 방식으로 장비별 도착·출발 기록에서 유효 처리 시간 분포를 뽑아 공장과 재생을 비교해 볼 수 있다.
-- 도착 기록을 새로 뽑으려면: `./setup_simulator.sh` 후 `bash experiments/run_implant_logs.sh` (시드당 약 30~40분). 기록은 `results/implant_setup/...`에 생기고, `src/implant_env.py`의 `record_path()`가 `data/records`(레포)와 이 폴더를 순서대로 찾는다.
-
-## 비교 기준 (baseline)
-
-`python3 baselines/run_baselines.py`
-
-- **lssu**: SMT2020 기본. 지금 가스 lot 먼저, 없으면 가장 오래 기다린 lot의 가스로 바로 교체.
-- **hold T**: 교체가 필요해지면 T분 기다린 뒤 교체.
-- **cov (압력 규칙, 팀 기준)**: 가스별 압력 = 대기 lot 수 ÷ (그 가스를 맡은 장비 수 + 1). 가장 높은 압력이 Q 이상이면 그 가스로 교체, 아니면 Tmax분까지 기다린 뒤 교체.
-  - 튜닝값(기록 시드 1): 128 = (Q 5, 120분), 132 = (3, 240분), 91 = (7, 240분). `src/implant_gym.py`의 `TUNED_COV`.
-  - 팀원 실험의 압력 규칙(Q 3, 2시간)은 `--q 3 --tmax 120`.
-  - 공장에서는 `run_implant_setup.py --mode cov --cov_fb`(같은 튜닝값). `--cov_fb` 없이 돌리면 고치기 전 튜닝값이다.
-
-시험 결과 (기록 시드 2·3 × 고장 시드 1·2, 240일), lot당 지연 = 대기 + 교체 시간:
-
-| 정책 | 128 | 132 | 91 |
-|---|---|---|---|
-| lssu | 2.19h | 2.31h | 3.62h |
-| cov | 1.08h | 1.33h | 2.05h |
-| DQN 10개 평균 (v4) | 1.01h (−6.9%) | 1.30h (−2.0%) | 2.10h (+2.6%) |
-| PPO 10개 평균 (v4) | 1.33h (+23%) | 1.69h (+27%) | 2.60h (+27%) |
-
-## 시드 용도 (데이터 나누기)
-
-| 시드 | 용도 |
-|---|---|
-| 기록 1 | cov 튜닝, RL 학습 |
-| 기록 7 | RL 검증(겹치지 않는 14일 구간 장비군당 6개). 2026-11-13 전에는 기록 1의 날짜 구간이라 학습과 겹쳤음 |
-| 기록 2, 3 × 고장 1~5 | 작은 환경 시험 (아무것도 고르지 않음) |
-| 공장 4, 5, 6 | 공장 최종 검증 (2년) |
-
-같은 시드로 공장을 돌리면 투입·고장 난수가 같아서, 2년 실행의 앞 240일은 같은 시드의 240일 기록과 같은 흐름이다. 그래서 시드마다 용도를 하나만 준다.
-
-## 출처
-
-- SMT2020: Kopp, Hassoun, Kalir & Mönch, IEEE TSM 33(4), 2020.
-- PySCFabSim-revised: https://github.com/david-dd/PySCFabSim-revised @ `ae3d55e` (원판 PySCFabSim-release, MIT). 레포에 라이선스 표기가 없어 코드를 복사하지 않고 `setup_simulator.sh`로 받는다. 코드는 수정하지 않고, `experiments/run_implant_setup.py`가 프로세스 안에서 함수를 바꿔 끼운다.
+공정 벤치마크: Kopp, Hassoun, Kalir & Mönch, SMT2020, IEEE TSM 33(4), 2020. 시뮬레이터: [PySCFabSim-revised](https://github.com/david-dd/PySCFabSim-revised), 사용 기준 커밋 `ae3d55e`. 외부 시뮬레이터는 저장소에 복사하지 않고 설치 스크립트로 받습니다.
