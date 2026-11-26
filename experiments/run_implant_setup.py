@@ -71,6 +71,10 @@ def main():
     p.add_argument("--policy", help="rl 모드: 정책 파일(.pt)")
     p.add_argument("--kind", choices=["ppo", "dqn"], help="rl 모드: 정책 종류")
     p.add_argument("--no_upstream", action="store_true", help="rl 모드: 앞 공정 lot 수를 0으로 (학습 때와 같게)")
+    p.add_argument("--rl_fams", nargs="+", default=None,
+                   help="rl 모드: RL을 넣을 장비군 (예: Implant_91). 나머지 implant 장비군은 cov(--cov_fb 값). 기본은 세 장비군 모두")
+    p.add_argument("--wait_min", type=float, default=0,
+                   help="rl 모드: 0보다 크면 '기다리기' = 이 분 동안 다시 묻지 않기(작은 환경과 같게). hot lot이 오면 기다림을 푼다")
     p.add_argument("--sample", action="store_true", help="rl 모드: argmax 대신 확률 정책에서 뽑는다(PPO, 작은 환경 시험과 같게)")
     p.add_argument("--hold_min", type=float, default=30, help="hold 모드의 교체 전 대기(분)")
     p.add_argument("--dataset", default="SMT2020_HVLM", choices=["SMT2020_HVLM", "SMT2020_LVHM"])
@@ -79,6 +83,9 @@ def main():
     p.add_argument("--days", type=int, default=730)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--log_events", action="store_true", help="implant 가스 장비군의 도착/투입 기록을 events.csv로 저장")
+    p.add_argument("--log_downs", action="store_true",
+                   help="implant 장비의 고장·PM(시간 기반, 처리 매수 기반) 시각과 길이를 downs.csv로 저장 (재생 환경의 고장 재생용)")
+    p.add_argument("--tag", default="", help="출력 폴더 이름 뒤에 붙일 표시 (기존 결과를 덮어쓰지 않으려고)")
     p.add_argument("--log_prev", action="store_true",
                    help="implant 도착마다 route상 바로 앞 1, 2번째 공정에 들어온 시각을 prev_times.csv로 저장 (재생 환경의 앞 공정 lot 수용)")
     p.add_argument("--log_state", action="store_true",
@@ -90,8 +97,10 @@ def main():
         mode_name = "covfb"
     if a.mode == "rl":
         mode_name = f"rl_{Path(a.policy).stem}"
+        if a.rl_fams:
+            mode_name += "_only" + "_".join(f.split("_")[-1] for f in a.rl_fams)
     cov_params = COV_FB if (a.cov_fb or a.mode == "rl") else COV
-    out = ROOT / "results" / "implant_setup" / f"{a.dataset}_{a.dispatcher}_{mode_name}_{a.strategy}_{a.days}d_s{a.seed}"
+    out = ROOT / "results" / "implant_setup" / f"{a.dataset}_{a.dispatcher}_{mode_name}_{a.strategy}_{a.days}d_s{a.seed}{a.tag}"
     (out / "greedy").mkdir(parents=True, exist_ok=True)
 
     sys.path.insert(0, str(SIM / "simulation"))
@@ -257,7 +266,7 @@ def main():
 
     hold_state = None
     if a.mode in ("hold", "cov", "rl"):
-        hold_state = {"until": {}, "since": {}, "holds": 0, "kept_gas": 0, "expired_switch": 0, "hot_skipped": 0,
+        hold_state = {"until": {}, "since": {}, "rl_until": {}, "holds": 0, "kept_gas": 0, "expired_switch": 0, "hot_skipped": 0,
                       "rl_calls": 0, "rl_wait": 0, "rl_switch": 0}
         hot_priority = max(lot.priority for lot in instance.active_lots + list(instance.dispatchable_lots))
         info["hold_min"] = a.hold_min if a.mode == "hold" else None
@@ -279,6 +288,7 @@ def main():
 
         def hold_dispatch(machine, lots):
             hold_state["since"].pop(machine.idx, None)
+            hold_state["rl_until"].pop(machine.idx, None)
             if machine.idx in hold_state["until"]:
                 del hold_state["until"][machine.idx]
                 if lots[0].actual_step.setup_needed == machine.current_setup:
@@ -348,7 +358,7 @@ def main():
         net.load_state_dict(torch.load(a.policy))
         net.eval()
         act_fn = RC.sampler(net, 1000 + a.seed) if a.sample else RC.greedy(net)
-        info["policy"] = {"path": a.policy, "kind": a.kind, "use_upstream": not a.no_upstream, "sample": a.sample}
+        info["policy"] = {"path": a.policy, "kind": a.kind, "use_upstream": not a.no_upstream, "sample": a.sample, "wait_min": a.wait_min, "rl_fams": a.rl_fams}
 
     def rl_decide(machine, lots):
         """rl 모드. 재생 환경의 rl_turn과 같은 조건에서만 정책을 부르고, 나머지는 cov가 처리한다."""
@@ -356,10 +366,14 @@ def main():
         cur = machine.current_setup
         if machine.family not in GAS_FAMS or sn == "" or sn == cur:
             return machine, lots
+        if a.rl_fams and machine.family not in a.rl_fams:
+            return cov_decide(machine, lots)  # RL을 안 넣은 장비군은 cov
         hot = any(l.priority >= hot_priority for l in machine.waiting_lots)
         if cur == "" or hot:
             return cov_decide(machine, lots)
         now = instance.current_time
+        if a.wait_min > 0 and now < hold_state["rl_until"].get(machine.idx, -1):
+            return machine, None  # 고정 시간 기다리는 중 (hot lot이면 위에서 이미 cov로 넘어감)
         since = hold_state["since"].setdefault(machine.idx, now)
         v, order, up = build_view(machine, now - since)
         if a.no_upstream:
@@ -372,6 +386,11 @@ def main():
         hold_state["rl_calls"] += 1
         if act == 0:
             hold_state["rl_wait"] += 1
+            if a.wait_min > 0:
+                until = now + a.wait_min * 60
+                hold_state["rl_until"][machine.idx] = until
+                instance.add_event(WakeEvent(until, machine))
+                return machine, None
             # 재생 환경은 같은 장비군의 어떤 사건(도착, 다른 장비 작업 끝)에도 다시 묻는다.
             # 도착은 시뮬레이터가 장비를 다시 깨우고, 작업 끝은 가장 이른 끝 시각에 깨우는 사건을 건다.
             ends = [e.timestamp for m in instance.family_machines[machine.family] if m is not machine
@@ -401,6 +420,51 @@ def main():
             h.append((o, self.current_time))
             inner_free_p(self, lot)
         DM.free_up_lots = staticmethod(prev_free)
+
+    downs = []  # (t, family, machine, kind, length 초). kind: br 고장, tpm 시간 기반 PM(사건), tpm_merged(투입에 합쳐짐), ppm i(처리 매수 기반)
+    if a.log_downs:
+        from events import BreakdownEvent
+        cur = {"kind": None}
+        inner_handle = BreakdownEvent.handle
+
+        def logged_handle(self, inst):
+            cur["kind"] = "br" if self.is_breakdown else "tpm"
+            try:
+                inner_handle(self, inst)
+            finally:
+                cur["kind"] = None
+        BreakdownEvent.handle = logged_handle
+        inner_hb = instance.handle_breakdown
+
+        def logged_hb(machine, delay):
+            if machine.family in GAS_FAMS:
+                downs.append((instance.current_time, machine.family, machine.idx, cur["kind"] or "?", delay))
+            return inner_hb(machine, delay)
+        instance.handle_breakdown = logged_hb
+        inner_tpm = BreakdownEvent.handle_timebased_pm
+
+        def logged_tpm(self, inst):
+            t = inner_tpm(self, inst)
+            if self.machine.family in GAS_FAMS:
+                downs.append((inst.current_time, self.machine.family, self.machine.idx, "tpm_merged", t))
+            return t
+        BreakdownEvent.handle_timebased_pm = logged_tpm
+
+        class _PMProxy:
+            """처리 매수 기반 PM 길이를 뽑을 때 기록한다. 원래 분포 객체의 sample()을 그대로 부른다(난수 순서 동일)."""
+            def __init__(self, d, m, i):
+                self.d, self.m, self.i = d, m, i
+
+            def sample(self):
+                x = self.d.sample()
+                downs.append((instance.current_time, self.m.family, self.m.idx, f"ppm{self.i}", x))
+                return x
+
+            def __getattr__(self, k):
+                return getattr(self.d, k)
+        for f in GAS_FAMS:
+            for m in instance.family_machines[f]:
+                m.maintenance_time = [_PMProxy(d, m, i) for i, d in enumerate(m.maintenance_time)]
 
     if a.log_events:
         inner_free = DM.free_up_lots
@@ -460,6 +524,7 @@ def main():
     if hold_state is not None:
         hold_state.pop("until")
         hold_state.pop("since")
+        hold_state.pop("rl_until")
     info["done_lots"] = len(instance.done_lots)
     info["active_lots"] = len(instance.active_lots)
     if a.log_prev:
@@ -473,6 +538,11 @@ def main():
             w.writerow(["t", "kind", "family", "lot", "setup", "part", "priority", "machine", "machine_setup_before", "n",
                         "step", "machine_time"])
             w.writerows(events)
+    if a.log_downs:
+        with open(out / "downs.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["t", "family", "machine", "kind", "length"])
+            w.writerows(downs)
     if a.log_state:
         with open(out / "state_log.csv", "w", newline="") as fh:
             w = csv.writer(fh)

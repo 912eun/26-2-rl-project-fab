@@ -2,10 +2,11 @@
 
 검증과 시험을 나눈 이유
 - 학습 중 보상은 매번 다른 14일 구간에서 나와 부하가 달라서, 숫자만 보고는 정책이 좋아졌는지 알 수 없다.
-- 그래서 고정된 구간 9개(장비군 3 × 시작일 3, 고장 시드 고정)에서 일정 간격으로 탐욕 정책을 돌리고,
+- 그래서 고정된 구간 18개(장비군 3 × 시작일 6, 고장 시드 고정)에서 일정 간격으로 탐욕 정책을 돌리고,
   같은 구간에서 cov가 낸 비용 대비 비율로 점수를 매긴다. 이 점수가 가장 낮은 시점의 모델을 저장한다.
-- 검증 구간은 학습과 같은 기록(시드 1)이다. 학습은 고장 시드를 무작위로 뽑고 검증은 고정 시드 9000번대를 쓴다.
-  최종 시험은 학습·검증에 쓰지 않은 기록 시드 2·3이다.
+- 검증은 학습(기록 시드 1)과 독립인 기록 시드 VAL_REC(=7)를 쓴다 (2026-11-13 수정).
+  전에는 시드 1의 날짜 구간을 썼는데, 학습 구간(60~234일)과 도착이 겹쳐 검증 점수가 부풀었다(0.81~0.88 대 시험 cov 대비 −3%).
+  최종 시험은 학습·검증에 쓰지 않은 기록 시드 2·3이다. 검증 점수는 고르기에만 쓰고 성능으로 보고하지 않는다.
 """
 import sys
 from pathlib import Path
@@ -19,10 +20,51 @@ sys.path.insert(0, str(ROOT / "src"))
 import implant_env as E  # noqa: E402
 import implant_gym as G  # noqa: E402
 
-TEST = [(f, rec, ss) for f in E.FAMILIES for rec in (2, 3) for ss in (1, 2)]
-VAL = [(f, d, 9000 + i) for f in E.FAMILIES for i, d in enumerate((75, 130, 185))]  # (장비군, 시작일, 고장 시드)
+TEST = [(f, rec, ss) for f in E.FAMILIES for rec in (2, 3) for ss in (1, 2, 3, 4, 5)]  # 2026-11-13: 고장 시드 1~2 → 1~5
+VAL_REC = 7  # 검증 전용 공장 기록 시드 (학습 1, 시험 2·3, 공장 검증 4~6과 겹치지 않음)
+VAL_DAYS0 = (70, 95, 120, 145, 170, 195)  # 겹치지 않는 14일 구간 6개 (장비군당), 2026-11-13 3개 → 6개
+VAL = [(f, d, 9000 + i) for f in E.FAMILIES for i, d in enumerate(VAL_DAYS0)]  # (장비군, 시작일, 고장 시드)
 VAL_DAYS = 14
 R_SCALE = 0.1
+
+
+class FreshPool:
+    """map을 부를 때마다 일꾼 n개를 새로 띄우고, 다 끝나면 모두 닫는 프로세스 풀 (2026-11-16).
+    일꾼을 학습 내내 재사용하면 검증마다 메모리가 쌓여 1000회 PPO에서 WSL 7.7GB를 넘겼고,
+    max_tasks_per_child(일꾼 교체)는 Python 3.12에서 교체 도중 가끔 멈췄다. 이 방식은 교체 동작이 없다.
+    일마다 난수 시드가 고정이라 검증·시험 숫자는 ProcessPoolExecutor(8)과 같다. 결과는 목록으로 돌려준다."""
+
+    def __init__(self, n=8):
+        self.n = n
+
+    def map(self, fn, items):
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(self.n) as ex:
+            return list(ex.map(fn, items))
+
+
+def make_pool(n=8):
+    """검증·시험용 프로세스 풀. 숫자는 어느 쪽이든 같고 속도와 메모리만 다르다.
+    - 기본(맥, 또는 메모리 16GB 이상): ProcessPoolExecutor를 학습 내내 재사용 (빠름, 일꾼당 메모리가 1.2GB까지 쌓임).
+      맥은 메모리 압축·스왑으로 버텨서 E1 P2·P3가 이 방식으로 문제없이 돌았다.
+    - 맥이 아니고 메모리 16GB 미만(예: WSL 7.7GB): FreshPool (검증마다 새로 띄움, 1.5~2배 느리지만 최대 약 3GB).
+      WSL은 한도를 넘으면 프로세스를 죽여서 E1 P1에서 PPO가 600회 넘어 멈췄다.
+    - 환경 변수 FRESH_POOL=1 / 0 으로 강제할 수 있다."""
+    import os
+    env = os.environ.get("FRESH_POOL")
+    if env is not None:
+        fresh = env == "1"
+    else:
+        try:
+            mem_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+        except (ValueError, OSError, AttributeError):
+            mem_gb = 0
+        fresh = sys.platform != "darwin" and mem_gb < 16
+    print(f"검증 풀: {'FreshPool(매번 새로)' if fresh else 'ProcessPoolExecutor(재사용)'}", flush=True)
+    if fresh:
+        return FreshPool(n)
+    from concurrent.futures import ProcessPoolExecutor
+    return ProcessPoolExecutor(n)
 
 
 def mlp(n_in, n_out, h=64):
@@ -91,7 +133,7 @@ def _load(kind, state):
 def _window_cost_cov(job):
     fam, day, ss = job
     q, t = G.TUNED_COV[fam]
-    sim = G.make_sim(fam, 1, ss, E.thr(q, t * 60, cov=True))
+    sim = G.make_sim(fam, VAL_REC, ss, E.thr(q, t * 60, cov=True))
     t0 = day * 86400
     sim.run(until=t0)
     a0 = sim.area
@@ -114,8 +156,9 @@ def _val_job(job):
     kind, state, use_up, (fam, day, ss), stoch, wait_min = job
     net = _load(kind, state)
     act = sampler(net, ss) if stoch else greedy(net)
-    env = G.ImplantEnv(seeds=(1,), use_upstream=use_up, wait_min=wait_min)
-    o, _ = env.reset(options=dict(fam=fam, seed=1, sim_seed=ss, t_start=day * 86400, t_end=(day + VAL_DAYS) * 86400))
+    env = G.ImplantEnv(seeds=(VAL_REC,), use_upstream=use_up, wait_min=wait_min)
+    o, _ = env.reset(options=dict(fam=fam, seed=VAL_REC, sim_seed=ss, t_start=day * 86400, t_end=(day + VAL_DAYS) * 86400,
+                                  count_from_start=True))  # 분모(cov)와 같이 구간 시작부터 센다 (2026-11-13)
     cost = 0.0
     while True:
         o, r, _, done, _ = env.step(act(o, env.action_masks()))
@@ -158,9 +201,9 @@ def test(ex, kind, path, use_up, tag, stoch=False, wait_min=0):
         res.setdefault(fam, {}).setdefault(kind, []).append(s)
     for (fam, rec, ss, k), s in ex.map(_rule_job, [(*j, k) for j in TEST for k in ("lssu", "cov")]):
         res.setdefault(fam, {}).setdefault(k, []).append(s)
-    print(f"\n[{tag}] 시험(기록 시드 2·3 × 고장 시드 1·2), lot당 지연 D(시간), hot lot 지연, 교체 시간 비율")
+    print(f"\n[{tag}] 시험(기록 시드 2·3 × 고장 시드 1~5), lot당 지연 D(시간), hot lot 지연, 교체 시간 비율")
     for fam, r in res.items():
-        m = {k: np.mean([x["delay_h"] for x in v]) for k, v in r.items()}
+        m = {k: np.mean([x["delay_h"] for x in v]) for k, v in r.items()}  # cov 대비 % = 평균 D끼리의 비율
         h = {k: np.mean([x["hot_delay_h"] for x in v]) for k, v in r.items()}
         su = {k: np.mean([x["setup_ratio"] for x in v]) for k, v in r.items()}
         print(f"{fam:12s} lssu {m['lssu']:.2f}  cov {m['cov']:.2f}  {kind.upper()} {m[kind]:.2f} "

@@ -63,14 +63,15 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--max_gap_h", type=float, default=12, help="재방문 되먹임으로 연결할 최대 왕복 시간")
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--sims", nargs="+", type=int, default=list(range(1, 11)), help="고장 난수 시드 (실행 1회 ±10% 흔들림)")
     a = p.parse_args()
-    jobs = [(f, s, r, ss, a.max_gap_h * 3600) for f in E.FAMILIES for s in (1, 2, 3) for r in RULES for ss in (1, 2)]
+    jobs = [(f, s, r, ss, a.max_gap_h * 3600) for f in E.FAMILIES for s in (1, 2, 3) for r in RULES for ss in a.sims]
     rep = {}
     with ProcessPoolExecutor(a.workers) as ex:
         for (f, s, r, ss, _), w, sr in ex.map(job, jobs):
             d = rep.setdefault((f, r, s), [0.0, 0.0])
-            d[0] += w / 2
-            d[1] += sr / 2
+            d[0] += w / len(a.sims)
+            d[1] += sr / len(a.sims)
     fab = fab_values()
     mean = lambda L, i: sum(x[i] for x in L) / len(L)  # noqa: E731
     print("① 절대값 (lssu): 대기 재생−공장 %, 시드 1/2/3 | 교체 시간 비율 차이 %p")

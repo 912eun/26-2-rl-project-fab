@@ -1,0 +1,62 @@
+{
+ "mode": "rl_dqn_up_e3_s11_only91",
+ "hold_min": null,
+ "hold": {
+  "holds": 107317,
+  "kept_gas": 99507,
+  "expired_switch": 7806,
+  "hot_skipped": 0,
+  "rl_calls": 34481,
+  "rl_wait": 31398,
+  "rl_switch": 3083
+ },
+ "policy": {
+  "path": "/Users/sye/서강대/26-2/강개론/project/results/rl_dqn/dqn_up_e3_s11.pt",
+  "kind": "dqn",
+  "use_upstream": true,
+  "sample": false,
+  "wait_min": 40.0,
+  "rl_fams": [
+   "Implant_91"
+  ]
+ },
+ "lot_waiting_at_machine": {
+  "Implant_128": [
+   333919,
+   1239405646.806629
+  ],
+  "Implant_132": [
+   229571,
+   1016800868.3061594
+  ],
+  "Implant_91": [
+   167010,
+   1081782990.1302128
+  ]
+ },
+ "family_time": {
+  "Implant_128": {
+   "n": 10,
+   "utilized_s": 185823456.75,
+   "setup_s": 20532960,
+   "pm_s": 43915319.651880726,
+   "br_s": 18387258.01460663
+  },
+  "Implant_132": {
+   "n": 8,
+   "utilized_s": 155423859.75,
+   "setup_s": 15134400,
+   "pm_s": 35831759.75025987,
+   "br_s": 14780396.805541638
+  },
+  "Implant_91": {
+   "n": 6,
+   "utilized_s": 105295923.0,
+   "setup_s": 13905600,
+   "pm_s": 26635621.36577969,
+   "br_s": 9287310.42287064
+  }
+ },
+ "done_lots": 41688,
+ "active_lots": 2272
+}

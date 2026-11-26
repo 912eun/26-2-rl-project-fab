@@ -1,12 +1,15 @@
 # Fab 가스 교체 최적화
 
+[![Python 3.13.5](https://img.shields.io/badge/Python-3.13.5-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Stable Baselines3](https://img.shields.io/badge/Stable%20Baselines3-236192?style=flat&logo=python&logoColor=white)](https://stable-baselines3.readthedocs.io/)
+[![Gymnasium](https://img.shields.io/badge/Gymnasium-0081A5?style=flat&logo=python&logoColor=white)](https://gymnasium.farama.org/)
+
 반도체 이온 주입 공정에서 현재 가스의 작업을 기다릴지, 다른 가스로 교체할지 결정하는 강화학습 프로젝트입니다. 공장 기록으로 보정한 재생 환경에 29차원 상태·3개 행동과 시간 기준 보상을 구성하고 DQN·PPO를 비교했습니다. 분리된 시험 조건에서 DQN은 압력 규칙 `cov` 대비 전체 지연을 평균 13.0% 줄였습니다. 전체 공장 재검증에서도 implant 대기는 감소했으나 공장 CT·처리량의 뚜렷한 개선까지 확인한 것은 아닙니다.
 
-[실험 설계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/EXPERIMENT_PLAN.md) · [실험 결과·한계](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md) · [공정 인터랙티브 설명](https://claude.ai/artifact/8D2UrQMXGViHDASqqgaEtV)
+[실험 설계](https://github.com/912eun/26-2-rl-project-fab/blob/main/docs/EXPERIMENT_PLAN.md) · [실험 결과·한계](https://github.com/912eun/26-2-rl-project-fab/blob/main/docs/STATUS.md) · [공정 인터랙티브 설명](https://claude.ai/artifact/8D2UrQMXGViHDASqqgaEtV)
 
 [공장 풀가동!](https://github.com/912eun/insicon-ai-mcs)의 AMR 운반·충전 제어에 이어, 장비의 가스 교체 시점과 결정 간격이 불규칙한 환경의 학습을 다룬 후속 프로젝트입니다.
-
-> 아래 결과와 실행 안내는 `develop` 브랜치의 E3·E6 실험 기준입니다. 코드를 실행할 때도 `develop`을 사용합니다.
 
 ## 01. 문제
 
@@ -66,8 +69,6 @@ $$
 | 조기 종료 | 최종 설정은 사용 안 함 | 최소 600 rollout 이후 patience 15, min_delta 0.01 |
 | 공통 | 기다리기 40분, γ=0.9/시간, 학습 시드 10~19 | 동일 |
 
-최종 설정은 [E3 실험 기록](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md)과 학습 스크립트 기준입니다. 초기 v4 결과와 최종 E3 설정을 구분합니다.
-
 기준선 `cov`는 가스별 대기량 ÷ 해당 가스 담당 장비 수를 이용한 압력 규칙입니다. 단순 즉시 교체 규칙뿐 아니라 이 강한 기준선과 비교했습니다.
 
 ## 03. 실험 결과
@@ -93,7 +94,7 @@ E6는 검증 점수로 고른 DQN 정책을 공장 시드 4·5·6에 적용하�
 
 implant 대기는 줄었지만 공장 전체 생산성의 뚜렷한 개선까지 확인한 것은 아닙니다. DQN의 공장 CT 차이는 평균 −0.08일로 시드 간 변동 약 0.45일보다 작았고, 처리량 차이는 ±0.8% 이내였습니다. 장비군을 하나씩 제어하는 조건에서는 다른 장비군의 대기가 늘어나는 경우도 있었습니다.
 
-PPO의 공장 검증은 보조 결과입니다. 검증으로 선택된 PPO 정책이 시험 성능에서도 10개 중 가장 좋았기 때문에 전체 PPO 평균보다 낙관적일 수 있습니다. 상세 표는 [진행 기록](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/STATUS.md)에 있습니다.
+PPO의 공장 검증은 보조 결과입니다. 검증으로 선택된 PPO 정책이 시험 성능에서도 10개 중 가장 좋았기 때문에 전체 PPO 평균보다 낙관적일 수 있습니다. 상세 표는 [진행 기록](https://github.com/912eun/26-2-rl-project-fab/blob/main/docs/STATUS.md)에 있습니다.
 
 ## 04. 시행착오
 
@@ -107,7 +108,7 @@ PPO의 공장 검증은 보조 결과입니다. 검증으로 선택된 PPO 정�
 ## 05. 실행
 
 ```bash
-git clone --branch develop https://github.com/912eun/26-2-rl-project-fab.git
+git clone --branch main https://github.com/912eun/26-2-rl-project-fab.git
 cd 26-2-rl-project-fab
 python3 -m venv .venv
 source .venv/bin/activate
@@ -144,7 +145,7 @@ python3 experiments/evaluate.py --kind ppo --stoch --wait_min 40 \
 python3 experiments/analyze.py
 ```
 
-전체 공장 실행은 별도 시뮬레이터 설치와 긴 실행 시간이 필요합니다. 팀 실험의 설정·평가 순서는 [실험 안내서](https://github.com/912eun/26-2-rl-project-fab/blob/develop/docs/EXPERIMENT_PLAN.md)를 따릅니다.
+전체 공장 실행은 별도 시뮬레이터 설치와 긴 실행 시간이 필요합니다. 팀 실험의 설정·평가 순서는 [실험 안내서](https://github.com/912eun/26-2-rl-project-fab/blob/main/docs/EXPERIMENT_PLAN.md)를 따릅니다.
 
 ```bash
 ./setup_simulator.sh
@@ -156,7 +157,7 @@ PATTERN=_e3 ALGS="dqn ppo" WAIT_MIN=40 SCOPE=both \
 
 ## 06. 코드와 출처
 
-| 경로 (`develop`) | 내용 |
+| 경로 | 내용 |
 |---|---|
 | `src/implant_env.py`, `implant_gym.py`, `implant_state.py` | 재생 환경·상태·행동·보상 |
 | `calibration/` | 공장과 재생 환경의 재현성 비교 |

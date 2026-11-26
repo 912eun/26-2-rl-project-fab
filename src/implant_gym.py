@@ -20,6 +20,15 @@ import implant_state as S
 
 TUNED_COV = {"Implant_128": (5, 120), "Implant_132": (3, 240), "Implant_91": (7, 240)}  # 재생 환경 튜닝값 (EDA 06)
 N_OBS = len(S.NAMES) + 6
+EVENT_DT_H = 2.0 / 60  # '다음 사건까지' 방식의 평균 결정 간격(cov 기준, 2026-11-13 측정 약 2분)
+
+
+def per_decision_prob(rate_h, wait_min):
+    """시간당 비율(쉬는 장비 1시간당 횟수)을 결정 1번당 확률로 바꾼다.
+    결정 간격 = wait_min분(고정 시간) 또는 EVENT_DT_H(다음 사건까지). p = 1 − exp(−rate × 간격)."""
+    import math
+    dt = wait_min / 60 if wait_min > 0 else EVENT_DT_H
+    return 1 - math.exp(-rate_h * dt)
 
 
 class _LogDeque(deque):
@@ -35,10 +44,14 @@ class _LogDeque(deque):
 _CHAINS = {}
 
 
-def make_sim(fam, seed, sim_seed, policy):
+def make_sim(fam, seed, sim_seed, policy, fab_downs=False):
+    """fab_downs=True면 고장·PM을 sim_seed 난수가 아니라 같은 기록 시드의 공장 기록(downs.csv)으로 재생한다."""
     if (fam, seed) not in _CHAINS:  # 기록 읽기는 프로세스마다 한 번만
         _CHAINS[(fam, seed)] = E.load_chains(fam, seed, 12 * 3600)[0]
-    sim = E.Sim(fam, _CHAINS[(fam, seed)], policy, seed=sim_seed)
+    sched = E.fab_schedule(fam, seed, sim_seed) if fab_downs else None
+    if fab_downs and sched is None:
+        raise FileNotFoundError(f"공장 고장 기록 없음: {E.record_path(seed, 'downs.csv')}")
+    sim = E.Sim(fam, _CHAINS[(fam, seed)], policy, seed=sim_seed, sched=sched)
     arr = [[] for _ in range(sim.n_gas)]
     sim.q = [_LogDeque(arr[g]) for g in range(sim.n_gas)]
     sim.qh = [_LogDeque(arr[g]) for g in range(sim.n_gas)]
@@ -132,12 +145,16 @@ class ImplantEnv(gym.Env):
         self.t_start = o.get("t_start", E.WARMUP + self.rng.uniform(0, 160 * 86400))
         self.t_end = o.get("t_end", self.t_start + self.window)
         self.sim = make_sim(fam, rec, sim_seed, self._policy)
+        self.sim.hot_breaks_wait = self.wait_s > 0
+        count_from_start = o.get("count_from_start", False)  # 검증: 비용을 첫 RL 결정이 아니라 구간 시작 시각부터 센다
+        if count_from_start:
+            self.sim.mark_t = self.t_start
         self.parent = greenlet.getcurrent()
         self.g = greenlet(self._sim_main)
         self.last_area = 0.0
         # 시작 전 구간은 cov로 돌고, 첫 RL 결정에서 멈춘다. 시작 전 비용은 보상에 넣지 않는다.
         out = self.g.switch()
-        self.last_area = self.sim.area
+        self.last_area = self.sim.mark_area if (count_from_start and self.sim.mark_area is not None) else self.sim.area
         self.last_t = self.sim.t
         if out is None:
             return np.zeros(N_OBS, np.float32), {}
@@ -157,9 +174,13 @@ def run_policy(fam, rec, sim_seed, act, use_upstream=True, wait_min=0):
     q, tmax = TUNED_COV[fam]
     base = E.thr(q, tmax * 60, cov=True)
 
+    cnt = [0, 0]  # [RL이 고른 결정, cov가 대신 처리한 결정] (교체가 필요한 결정만)
+
     def pol(s, m):
         if not rl_turn(s, m):
+            cnt[1] += 1
             return base(s, m)
+        cnt[0] += 1
         obs, gs = observe(s, m, use_upstream)
         mask = np.array([True, s.waiting(gs[1]) > 0, s.waiting(gs[2]) > 0])
         a = act(obs, mask)
@@ -167,5 +188,9 @@ def run_policy(fam, rec, sim_seed, act, use_upstream=True, wait_min=0):
             m.forced_until = s.t + wait_min * 60
             return None, m.forced_until
         return (None, None) if a == 0 else (gs[a], None)
-    sim = make_sim(fam, rec, sim_seed, pol).run()
-    return E.summarize(sim)
+    sim = make_sim(fam, rec, sim_seed, pol)
+    sim.hot_breaks_wait = wait_min > 0
+    sim.run()
+    out = E.summarize(sim)
+    out["rl_share"] = cnt[0] / max(1, sum(cnt))  # 결정 중 RL이 고른 비율 (나머지는 hot lot·가스 없음으로 cov가 처리)
+    return out

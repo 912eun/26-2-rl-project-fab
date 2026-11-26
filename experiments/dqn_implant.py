@@ -70,23 +70,38 @@ def main():
     p.add_argument("--buffer", type=int, default=200_000)
     p.add_argument("--batch", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--lr_decay_steps", type=int, default=0,
+                   help="0보다 크면 학습률을 이 step까지 선형으로 줄이고 그 뒤로는 lr_floor 비율을 유지한다 (E4, 예: 720000). 0이면 고정")
+    p.add_argument("--lr_floor", type=float, default=0.1, help="학습률 하한 (처음 학습률 대비 비율, --lr_decay_steps가 있을 때만)")
     p.add_argument("--gamma_h", type=float, default=0.9, help="1시간당 할인")
     p.add_argument("--train_every", type=int, default=4, help="환경 step 몇 번마다 경사 1번")
     p.add_argument("--target_every", type=int, default=2000, help="경사 몇 번마다 타깃 망 복사")
     p.add_argument("--learn_start", type=int, default=10_000)
     p.add_argument("--eps_end", type=float, default=0.05)
-    p.add_argument("--eps_frac", type=float, default=0.3, help="전체 step 중 ε을 1에서 eps_end로 줄이는 비율")
+    p.add_argument("--eps_frac", type=float, default=0.3, help="전체 step 중 ε을 1에서 eps_end로 줄이는 비율 (--eps_steps가 없을 때)")
+    p.add_argument("--eps_steps", type=int, default=None,
+                   help="ε을 1에서 eps_end로 줄이는 step 수를 최대 학습량과 떼어 고정한다 (예: 360000). 주면 eps_frac 무시")
     p.add_argument("--val_every", type=int, default=20_480, help="환경 step 몇 번마다 검증 (PPO 10 iter와 같은 양)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--patience", type=int, default=0,
+                   help="0보다 크면 조기 종료: 가장 좋은 검증 점수가 min_delta 이상 좋아지지 않은 검증이 이 횟수만큼 연속이면 멈춘다(--steps는 최대)")
+    p.add_argument("--min_delta", type=float, default=0.01)
+    p.add_argument("--min_steps", type=int, default=200_000, help="조기 종료를 이 step 전에는 하지 않는다")
     p.add_argument("--no_upstream", action="store_true")
     p.add_argument("--suffix", default="")
     p.add_argument("--wait_min", type=float, default=0, help="0보다 크면 '기다리기' = 이 분 동안 다시 묻지 않기 (팀 결정: 고정 시간)")
     p.add_argument("--nstep_h", type=float, default=0.0,
                    help="0보다 크면 시간 기준 다단계 목표: 흐른 시간이 이 값(시간) 이상이 될 때까지 실제 보상을 더하고 그 뒤에서만 Q로 이어 붙인다")
     p.add_argument("--nstep_max", type=int, default=64, help="다단계 목표에 묶는 최대 결정 수")
+    p.add_argument("--explore_rate_h", type=float, default=None,
+                   help="ε 탐색의 교체를 시간 기준으로: 쉬는 장비 1시간당 횟수. 결정 1번당 확률로 바꿔 explore_switch를 덮어쓴다 "
+                        "(0.6 = '다음 사건까지'에서 결정당 0.02와 같음)")
     p.add_argument("--explore_switch", type=float, default=None,
                    help="ε 탐색에서 교체를 고를 확률. 없으면 고를 수 있는 행동 중 고르게. 결정이 촘촘해서 고르게 뽑으면 교체를 남발한다")
     a = p.parse_args()
+    if a.explore_rate_h is not None:
+        a.explore_switch = G.per_decision_prob(a.explore_rate_h, a.wait_min)
+        print(f"explore_rate_h {a.explore_rate_h}/h, wait_min {a.wait_min} → 결정당 교체 탐색 확률 {a.explore_switch:.4f}", flush=True)
     use_up = not a.no_upstream
     tag = f"{'up' if use_up else 'noup'}{a.suffix}_s{a.seed}"
     OUT.mkdir(parents=True, exist_ok=True)
@@ -123,14 +138,18 @@ def main():
     qt.load_state_dict(q.state_dict())
     opt = torch.optim.Adam(q.parameters(), lr=a.lr)
     buf = Replay(a.buffer, G.N_OBS)
-    ex = ProcessPoolExecutor(8)
+    # 메모리 16GB 미만이면 검증마다 새로 띄우는 풀, 아니면 재사용 풀 (숫자는 같다. rl_common.make_pool 설명)
+    ex = C.make_pool(8)
 
     log, t0 = [], time.time()
     best, best_step, path = float("inf"), -1, OUT / f"dqn_{tag}.pt"
     step, n_upd, r_sum, r_n, waits, losses = 0, 0, 0.0, 0, 0, []
+    sim_h = 0.0  # 모든 환경이 경험한 시뮬레이션 시간 합 (학습량을 날수 축으로 보기 위해)
     next_val = a.val_every
+    no_improve, stop_reason = 0, "max"
     while step < a.steps:
-        eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / (a.eps_frac * a.steps))
+        eps_len = a.eps_steps if a.eps_steps else a.eps_frac * a.steps
+        eps = max(a.eps_end, 1 - (1 - a.eps_end) * step / eps_len)
         for k, env in enumerate(envs):
             o, m = state[k]
             if rng.random() < eps:
@@ -150,6 +169,7 @@ def main():
             else:
                 buf.add(o, act, r * R_SCALE, o2, m2, info["dt_h"], float(term))
             r_sum += r; r_n += 1; waits += act == 0
+            sim_h += info["dt_h"]
             if term or trunc:
                 o2, _ = env.reset()
                 m2 = env.action_masks().copy()
@@ -163,6 +183,9 @@ def main():
                     y = br + (a.gamma_h ** bdt) * (1 - bterm) * v2
                 qsa = q(bo).gather(1, ba.unsqueeze(1)).squeeze(1)
                 loss = F.smooth_l1_loss(qsa, y)
+                if a.lr_decay_steps > 0:
+                    for g in opt.param_groups:
+                        g["lr"] = a.lr * max(1 - step / a.lr_decay_steps, a.lr_floor)
                 opt.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(q.parameters(), 10.0)
@@ -174,20 +197,26 @@ def main():
         if step >= next_val or step >= a.steps:
             next_val += a.val_every
             v, vf = C.validate(ex, "dqn", q, use_up, False, a.wait_min)
-            row = dict(step=step, eps=eps, mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
+            row = dict(step=step, sim_days=sim_h / 24, eps=eps, lr=opt.param_groups[0]["lr"], mean_r=r_sum / max(r_n, 1), wait_share=waits / max(r_n, 1),
                        loss=float(np.mean(losses)) if losses else None, val=v, val_fam=vf, sec=time.time() - t0)
             log.append(row)
+            no_improve = 0 if v < best - a.min_delta else no_improve + 1
             if v < best:
                 best, best_step = v, step
                 torch.save(q.state_dict(), path)
-            print(f"[dqn_{tag}] step {step:7d}  ε {eps:.2f}  step당 보상 {row['mean_r']:8.3f}  기다리기 {row['wait_share']:.2f}  "
+            print(f"[dqn_{tag}] step {step:7d}  ε {eps:.2f}  lr {row['lr']:.1e}  step당 보상 {row['mean_r']:8.3f}  기다리기 {row['wait_share']:.2f}  "
                   f"손실 {row['loss'] or 0:.4f}  검증(cov=1) {v:.3f} {' '.join(f'{x:.2f}' for x in vf.values())}  "
                   f"최고 {best:.3f}@{best_step}  {(time.time() - t0) / 60:5.1f}분", flush=True)
             r_sum, r_n, waits, losses = 0.0, 0, 0, []
+            if a.patience > 0 and step >= a.min_steps and no_improve >= a.patience:
+                stop_reason = f"patience {a.patience} at step {step}"
+                print(f"[dqn_{tag}] 조기 종료: 검증 {a.patience}번 연속 {a.min_delta} 이상 개선 없음 (step {step})", flush=True)
+                break
     torch.save(q.state_dict(), OUT / f"dqn_{tag}_last.pt")
     print(f"[dqn_{tag}] 검증 최고 step {best_step} 점수 {best:.3f}로 시험", flush=True)
     res = C.test(ex, "dqn", path, use_up, f"dqn_{tag}", False, a.wait_min)
-    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), best_step=best_step, best_val=best, log=log, eval=res), indent=1))
+    (OUT / f"result_{tag}.json").write_text(json.dumps(dict(args=vars(a), best_step=best_step, best_val=best, steps_run=step, stop_reason=stop_reason,
+                                                                 sim_days=sim_h / 24, log=log, eval=res), indent=1))
 
 
 if __name__ == "__main__":
